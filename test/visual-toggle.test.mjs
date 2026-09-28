@@ -13,18 +13,21 @@ function fixture() {
 		paint: { "line-color": "#123456", "line-opacity": { stops: [[16, 0.7], [17, 0]] } }
 	};
 	const layers = [copy(original), { id: "mtb-imba", type: "line", filter: ["has", "mtb_scale_imba"], paint: {} },
-		{ id: "mtb-label", type: "symbol", filter: ["has", "mtb_scale"], paint: {} }];
+		{ id: "mtb-label", type: "symbol", layout: { "text-font": ["Satoshi Regular"] }, filter: ["has", "mtb_scale"], paint: {} }];
 	const timers = [];
 	const events = {};
 	let interval;
 	const receivers = [];
 	const messages = [];
 	const sources = new Map();
+	const images = new Map();
 	function receive(event) { for (const fn of receivers) fn(event); }
 	let writes = 0;
-	const canvas = {};
+	const canvas = { getBoundingClientRect() { return { left: 100, top: 50 }; } };
 	const map = {
 		getCanvas() { return canvas; },
+		hasImage(id) { return images.has(id); },
+		addImage(id, data) { images.set(id, data); },
 		getBounds() { return { getSouth: () => 61, getNorth: () => 61.01, getWest: () => 23, getEast: () => 23.01 }; },
 		getZoom() { return 16; },
 		getSource(id) { return sources.get(id); },
@@ -50,8 +53,8 @@ function fixture() {
 	canvas.parentElement = { __reactFiber$test: fiber };
 	const window = { postMessage(message) { messages.push(copy(message)); }, addEventListener(type, fn) { receivers.push(fn); } };
 	runInNewContext(source, {
-		window, Node: class {}, console, location: { origin: "https://www.komoot.com" }, structuredClone,
-		document: { contains(value) { return value === canvas; }, querySelectorAll() { return [canvas]; } },
+		window, Image: class { set src(value) { this.onload(); } }, Node: class {}, console, location: { origin: "https://www.komoot.com" }, structuredClone,
+		document: { currentScript: { dataset: { hazardIcons: "chrome-extension://test/hazard-icons.png" } }, createElement() { return { getContext() { return { drawImage() {}, getImageData(x, y, width, height) { return { width, height }; } }; } }; }, contains(value) { return value === canvas; }, querySelectorAll() { return [canvas]; } },
 		clearTimeout() {},
 		setInterval(fn) { interval = fn; },
 		setTimeout(fn) { timers.push(fn); return timers.length; }
@@ -65,7 +68,7 @@ function fixture() {
 		flush();
 	}
 	interval(); flush();
-	return { layers, original, configure, messages, sources, reply(data) { receive({ source: window, origin: "https://www.komoot.com", data }); flush(); }, writes: () => writes, restyle() { events.styledata(); flush(); } };
+	return { layers, original, configure, messages, sources, images, events, map, reply(data) { receive({ source: window, origin: "https://www.komoot.com", data }); flush(); }, writes: () => writes, restyle() { events.styledata(); flush(); } };
 }
 
 function evaluate(expression, properties) {
@@ -387,15 +390,95 @@ test("hazard overlays survive restyling, remain independent and ignore replies a
 	f.reply({ type: "KRB_HAZARD_DATA", requestId: request.requestId, data: { type: "FeatureCollection", features: [] } });
 	assert.equal(f.sources.has("krb-conditions"), true);
 	const original = copy(f.layers.filter((layer) => layer.id.startsWith("krb-conditions")));
-	assert.equal(original.length, 3);
+	assert.equal(original.length, 12);
 	f.configure({ showHazards: true, visualsEnabled: true });
 	f.restyle();
 	assert.deepEqual(f.layers.filter((layer) => layer.id.startsWith("krb-conditions")), original);
 	f.layers.splice(f.layers.findIndex((layer) => layer.id === "krb-conditions-line"), 1);
 	f.restyle();
-	assert.equal(f.layers.filter((layer) => layer.id.startsWith("krb-conditions")).length, 3);
+	assert.equal(f.layers.filter((layer) => layer.id.startsWith("krb-conditions")).length, 12);
 	f.configure({ showHazards: false });
 	assert.equal(f.sources.has("krb-conditions"), false);
 	f.reply({ type: "KRB_HAZARD_DATA", requestId: request.requestId, data: { type: "FeatureCollection", features: [] } });
 	assert.equal(f.sources.has("krb-conditions"), false);
+});
+
+
+test("hazard labels reuse the host font and defer safely when no supported font exists", function () {
+	const f = fixture();
+	const native = f.layers.find((layer) => layer.id === "mtb-label");
+	delete native.layout["text-font"];
+	f.configure({ showHazards: true });
+	const request = f.messages.find((message) => message.type === "KRB_HAZARD_VIEW");
+	f.reply({ type: "KRB_HAZARD_DATA", requestId: request.requestId, data: { type: "FeatureCollection", features: [] } });
+	assert.ok(f.layers.find((layer) => layer.id === "krb-conditions-line"));
+	assert.ok(f.layers.find((layer) => layer.id === "krb-conditions-icon-point-other"));
+	assert.equal(f.layers.find((layer) => layer.id === "krb-conditions-label"), undefined);
+	native.layout["text-font"] = ["Host Font Regular"];
+	f.restyle();
+	assert.deepEqual(f.layers.find((layer) => layer.id === "krb-conditions-label").layout["text-font"], ["Host Font Regular"]);
+});
+
+
+test("hazard hover prioritises markers, positions details and clears on leaving features", function () {
+	const f = fixture();
+	f.configure({ showHazards: true });
+	const request = f.messages.find((message) => message.type === "KRB_HAZARD_VIEW");
+	f.reply({ type: "KRB_HAZARD_DATA", requestId: request.requestId, data: { type: "FeatureCollection", features: [] } });
+	f.map.queryRenderedFeatures = () => [
+		{ layer: { id: "krb-conditions-line" }, properties: { label: "Width: 0.5 m" } },
+		{ layer: { id: "krb-conditions-icon-point-other" }, properties: { label: "barrier: gate", tip_other: "barrier: gate" } }
+	];
+	f.events.mousemove({ point: { x: 20, y: 30 } });
+	assert.deepEqual(f.messages.at(-1), { type: "KRB_HAZARD_TOOLTIP", text: "barrier: gate", x: 120, y: 80 });
+	f.events.click({ point: { x: 20, y: 30 } });
+	assert.equal(f.messages.at(-1).text, "barrier: gate");
+	f.map.queryRenderedFeatures = () => [];
+	f.events.mousemove({ point: { x: 25, y: 35 } });
+	assert.equal(f.messages.at(-1).text, "");
+	f.events.movestart();
+	assert.equal(f.messages.at(-1).text, "");
+	const label = f.layers.find((layer) => layer.id === "krb-conditions-label");
+	assert.equal(label.layout["text-size"], 12);
+	assert.deepEqual(label.layout["text-field"], ["get", "widthLabel"]);
+});
+
+
+test("each category has a separate image, layer and hit target", function () {
+	const f = fixture();
+	f.configure({ showHazards: true });
+	const request = f.messages.find((message) => message.type === "KRB_HAZARD_VIEW");
+	f.reply({ type: "KRB_HAZARD_DATA", requestId: request.requestId, data: { type: "FeatureCollection", features: [] } });
+	assert.equal(f.images.size, 5);
+	for (const key of ["mud", "vegetation", "narrow", "log", "other"]) {
+		const layer = f.layers.find((item) => item.id === `krb-conditions-icon-point-${key}`);
+		assert.equal(layer.layout["icon-image"], `krb-hazard-${key}`);
+		f.map.queryRenderedFeatures = () => [{ layer, properties: { label: "all hazards", [`tip_${key}`]: key } }];
+		f.events.mousemove({ point: { x: 5, y: 5 } });
+		assert.equal(f.messages.at(-1).text, key);
+	}
+	f.images.clear();
+	f.restyle();
+	assert.equal(f.images.size, 5);
+});
+
+
+test("width labels switch contrast with satellite visibility without recreating the layer", function () {
+	const f = fixture();
+	f.configure({ showHazards: true });
+	const request = f.messages.find((message) => message.type === "KRB_HAZARD_VIEW");
+	f.reply({ type: "KRB_HAZARD_DATA", requestId: request.requestId, data: { type: "FeatureCollection", features: [] } });
+	const label = f.layers.find((layer) => layer.id === "krb-conditions-label");
+	assert.equal(label.layout["text-size"], 12);
+	assert.equal(label.paint["text-color"], "#000000");
+	assert.equal(label.paint["text-halo-color"], "#ffffff");
+	const satellite = { id: "satellite", type: "raster", layout: {}, paint: {} };
+	f.layers.push(satellite);
+	f.restyle();
+	assert.equal(label.paint["text-color"], "#fff1cf");
+	assert.equal(label.paint["text-halo-color"], "#222222");
+	satellite.layout.visibility = "none";
+	f.restyle();
+	assert.equal(label.paint["text-color"], "#000000");
+	assert.equal(label.paint["text-halo-color"], "#ffffff");
 });

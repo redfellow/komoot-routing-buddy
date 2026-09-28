@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 const source = readFileSync(new URL("../hazards.js", import.meta.url), "utf8");
 function setup(fetch) {
-	const context = { fetch, URLSearchParams, AbortSignal, TextDecoder };
+	const context = { fetch, URL, URLSearchParams, AbortSignal, TextDecoder };
 	runInNewContext(source, context);
 	return context.KrbHazards;
 }
@@ -27,7 +27,7 @@ test("hazard queries validate bounds and cache successful responses", async func
 	let calls = 0;
 	const api = setup(async function (url, options) {
 		calls++;
-		assert.equal(url, "https://overpass-api.de/api/interpreter");
+		assert.equal(url, "https://overpass.private.coffee/api/interpreter");
 		assert.match(options.body.get("data"), /mtb:scale/);
 		assert.match(options.headers["User-Agent"], /^KomootRoutingBuddy\/.*github.com\/redfellow/);
 		assert.equal(options.headers.Accept, "application/json");
@@ -47,7 +47,7 @@ test("server failures back off and incomplete responses are not treated as empty
 	const api = setup(async function () { calls++; return new Response(JSON.stringify({ remark: "timeout", elements: [] })); });
 	await assert.rejects(api.load([61, 23, 61.01, 23.01]), /incomplete/);
 	await assert.rejects(api.load([61, 23, 61.01, 23.01]), /incomplete/);
-	assert.equal(calls, 1);
+	assert.equal(calls, 3);
 });
 
 test("hazards and remembered layers default on without replacing saved opt-outs", async function () {
@@ -61,4 +61,176 @@ test("hazards and remembered layers default on without replacing saved opt-outs"
 	options = await context.KrbSettings.getOptions();
 	assert.equal(options.showHazards, false);
 	assert.equal(options.rememberLayers, false);
+});
+
+test("identification rule is installed once and scoped to this extension and endpoint", async function () {
+	const calls = [];
+	const context = { URL, KrbBrowser: {
+		runtime: { getManifest() { return { version: "1.2.0" }; }, getURL() { return "chrome-extension://test-extension/"; } },
+		declarativeNetRequest: { async updateDynamicRules(rule) { calls.push(rule); } }
+	} };
+	runInNewContext(source, context);
+	await Promise.all([context.KrbHazards.identifyRequests(), context.KrbHazards.identifyRequests()]);
+	assert.equal(calls.length, 1);
+	const rule = calls[0].addRules[0];
+	assert.equal(rule.condition.urlFilter, "|https://overpass.private.coffee/api/interpreter|");
+	assert.deepEqual(Array.from(rule.condition.initiatorDomains), ["test-extension"]);
+	assert.deepEqual(Array.from(rule.condition.requestMethods), ["post"]);
+	assert.match(rule.action.requestHeaders[0].value, /^KomootRoutingBuddy\/1.2.0/);
+});
+
+test("persistent cache survives background restarts and expires after 30 minutes", async function () {
+	let stored = {};
+	let now = 1000000;
+	let calls = 0;
+	function restart() {
+		const context = { console, URL, URLSearchParams, AbortSignal, TextDecoder, Date: { now: () => now },
+			KrbBrowser: { storage: { local: {
+				async get() { return structuredClone(stored); },
+				async set(value) { stored = structuredClone(value); }
+			} } },
+			async fetch() { calls++; return new Response(JSON.stringify({ elements: [way] })); }
+		};
+		runInNewContext(source, context);
+		return context.KrbHazards;
+	}
+	const bounds = [61, 23, 61.01, 23.01];
+	await restart().load(bounds);
+	assert.equal(calls, 1);
+	now += 29 * 60000;
+	await restart().load(bounds);
+	assert.equal(calls, 1);
+	now += 60001;
+	await restart().load(bounds);
+	assert.equal(calls, 2);
+});
+
+test("failed requests are not persisted and retain HTTP throttle status", async function () {
+	const writes = [];
+	const context = { console, URL, URLSearchParams, AbortSignal, TextDecoder,
+		KrbBrowser: { storage: { local: { async get() { return {}; }, async set(value) { writes.push(value); } } } },
+		async fetch() { return new Response("unavailable", { status: 429 }); }
+	};
+	runInNewContext(source, context);
+	for (let i = 0; i < 2; i++) {
+		await assert.rejects(context.KrbHazards.load([61, 23, 61.01, 23.01]), (error) => error.status === 429 && error.retryMs > 0);
+	}
+	assert.equal(writes.length, 0);
+});
+
+test("counts distinguish hazards from ordinary width data and deduplicate overlapping categories", function () {
+	const result = setup().convert([
+		way, way,
+		{ ...way, id: 2, tags: { "mtb:scale": "0", surface: "mud", width: "0.5" } },
+		{ ...way, id: 3, tags: { "mtb:scale": "0", width: "3" } },
+		{ ...way, id: 4, tags: { "mtb:scale": "0", width: "0" } }
+	]);
+	assert.equal(result.features.length, 4);
+	assert.equal(result.counts.total, 2);
+	assert.equal(result.counts.mud, 1);
+	assert.equal(result.counts.vegetation, 1);
+	assert.equal(result.counts.narrow, 2);
+});
+
+test("expanded cache covers nearby pans and zooms without hiding uncovered areas", async function () {
+	let calls = 0;
+	const api = setup(async function () { calls++; return new Response(JSON.stringify({ elements: [] })); });
+	await api.load([61, 23, 61.01, 23.01]);
+	await api.load([61.001, 23.001, 61.009, 23.009]);
+	await api.load([61.001, 23.001, 61.011, 23.011]);
+	assert.equal(calls, 1);
+	await api.load([61.02, 23.02, 61.03, 23.03]);
+	assert.equal(calls, 2);
+	const nearLimit = [61, 23, 61.04, 23.10];
+	assert.doesNotThrow(() => api.boundsKey(api.expandedBounds(nearLimit)));
+});
+
+test("providers are sequential, have independent cooldowns, and honour Retry-After", async function () {
+	let now = 1000000;
+	let inFlight = 0;
+	const calls = [];
+	const context = { URL, URLSearchParams, AbortSignal, TextDecoder, Date: { now: () => now, parse: Date.parse },
+		async fetch(url) {
+			assert.equal(inFlight, 0);
+			inFlight++;
+			calls.push(url);
+			await Promise.resolve();
+			inFlight--;
+			if (url.includes("private.coffee")) return new Response("busy", { status: 429, headers: { "Retry-After": "60" } });
+			if (url.includes("mail.ru")) return new Response("busy", { status: 504 });
+			return new Response(JSON.stringify({ elements: [] }));
+		}
+	};
+	runInNewContext(source, context);
+	const api = context.KrbHazards;
+	await api.load([61, 23, 61.01, 23.01]);
+	assert.deepEqual(calls.map((url) => new URL(url).hostname), ["overpass.private.coffee", "maps.mail.ru", "overpass-api.de"]);
+	now += 31000;
+	calls.length = 0;
+	await api.load([62, 23, 62.01, 23.01]);
+	assert.deepEqual(calls.map((url) => new URL(url).hostname), ["maps.mail.ru", "overpass-api.de"]);
+	now += 31000;
+	calls.length = 0;
+	await api.load([63, 23, 63.01, 23.01]);
+	assert.equal(new URL(calls[0]).hostname, "overpass.private.coffee");
+});
+
+test("invalid queries do not fall through providers; exhausted providers are not hammered", async function () {
+	let calls = 0;
+	const invalid = setup(async function () { calls++; return new Response("bad query", { status: 400 }); });
+	await assert.rejects(invalid.load([61, 23, 61.01, 23.01]), (error) => error.status === 400);
+	assert.equal(calls, 1);
+	calls = 0;
+	const down = setup(async function () { calls++; return new Response("busy", { status: 504 }); });
+	await assert.rejects(down.load([61, 23, 61.01, 23.01]), (error) => error.exhausted && error.retryMs > 0);
+	await assert.rejects(down.load([62, 23, 62.01, 23.01]), (error) => error.exhausted);
+	assert.equal(calls, 3);
+});
+
+test("cached aggregate totals are recalculated from distinct feature flags", async function () {
+	const data = setup().convert([way, { ...way, id: 2, tags: { "mtb:scale": "0", width: "0.5" } }]);
+	data.counts.total = 0;
+	const context = { console, KrbBrowser: { storage: { local: { async get() {
+		return { osmHazardsCacheV4: [{ key: "61,23,61.02,23.02", time: Date.now(), data }] };
+	} } } }, fetch() { throw new Error("Unexpected network request"); } };
+	runInNewContext(source, context);
+	const result = await context.KrbHazards.load([61, 23, 61.01, 23.01]);
+	assert.equal(result.counts.total, 2);
+	assert.equal(result.counts.narrow, 2);
+	assert.equal(result.counts.vegetation, 1);
+});
+
+
+test("compact width labels belong only to rated trails and retain full hover details", function () {
+	const result = setup().convert([
+		{ ...way, id: 10, tags: { "mtb:scale": "0", width: "50 cm" } },
+		{ ...way, id: 11, tags: { width: "3" } },
+		{ ...way, id: 12, tags: { "mtb:scale": "6", width: "3" } },
+		{ ...way, id: 13, tags: { "mtb:scale": "5", est_width: "0.5" } },
+		{ type: "node", id: 2, lat: 61, lon: 23, tags: { barrier: "gate", width: "1" } }
+	]);
+	assert.equal(result.features.length, 3);
+	assert.equal(result.features[0].properties.widthLabel, "0.5m");
+	assert.equal(result.features[0].properties.trailRating, "S0");
+	assert.equal(result.features[1].properties.widthLabel, "≈0.5m");
+	assert.equal(result.features[2].properties.widthLabel, "");
+	assert.match(result.features[2].properties.label, /barrier: gate/);
+});
+
+
+test("specific icons suppress the generic warning and have category-only tooltips", function () {
+	const cases = [
+		[{ obstacle: "vegetation", width: "0.5" }, ["vegetation", "narrow"]],
+		[{ obstacle: "narrow" }, ["narrow"]],
+		[{ obstacle: "log" }, ["log"]],
+		[{ surface: "mud" }, ["mud"]],
+		[{ obstacle: "rock" }, ["other"]],
+		[{ obstacle: "vegetation;log;rock", surface: "mud" }, ["mud", "vegetation", "log"]]
+	];
+	for (const [tags, expected] of cases) {
+		const p = setup().convert([{ ...way, tags: { "mtb:scale": "1", ...tags } }]).features[0].properties;
+		assert.deepEqual(["mud", "vegetation", "narrow", "log", "other"].filter((key) => p[`icon_${key}`]), expected);
+		if (p.icon_vegetation) assert.doesNotMatch(p.tip_vegetation, /Width|log/);
+		if (p.icon_narrow) assert.doesNotMatch(p.tip_narrow, /vegetation/);
+	}
 });
