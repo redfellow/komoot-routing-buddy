@@ -265,3 +265,16 @@ test("clearing OSM removes persistent and memory results and forces a fresh requ
 	await api.load(bounds);
 	assert.equal(calls, 2);
 });
+
+test("adjacent preloaded areas satisfy a viewport without a new request", async function () {
+	const data = setup().convert([way]);
+	const saved = [
+		{ key: "61,23,61.01,23.01", time: Date.now(), data },
+		{ key: "61,23.01,61.01,23.02", time: Date.now(), data }
+	];
+	const context = { console, KrbBrowser: { storage: { local: { async get() { return { osmHazardsCacheV4: saved }; } } } } };
+	runInNewContext(source, context);
+	const result = await context.KrbHazards.load([61.001, 23.005, 61.009, 23.015]);
+	assert.equal(result.features.length, data.features.length);
+	assert.equal(result.counts.total, data.counts.total);
+});

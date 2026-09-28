@@ -19,7 +19,8 @@ globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender, s
 	if (!/^https:\/\/www\.komoot\.com\/(?:tour\/[^/]+\/(?:zoom|edit)|plan(?:\/[^?]*)?)(?:\?.*)?$/.test(sender.url || "")) return;
 	globalThis.KrbBrowser.storage.sync.get("trailOptions").then(function (saved) {
 		if (saved.trailOptions?.showHazards === false) throw new Error("Hazards disabled");
-		return globalThis.KrbHazards.load(message.bounds);
+		if (message.prefetch && saved.trailOptions?.preloadRouteHazards !== true) throw new Error("Route preload disabled");
+		return globalThis.KrbHazards.load(message.bounds, message.prefetch === true);
 	}).then((data) => sendResponse({ data })).catch((error) => sendResponse({ error: error.message, retryMs: error.retryMs, status: error.status, exhausted: error.exhausted }));
 	return true;
 });

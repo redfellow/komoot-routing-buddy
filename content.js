@@ -5,6 +5,9 @@ const contentSettings = globalThis.KrbSettings;
 const AVOID_COLOUR = "#7a1016";
 const STYLE_ID = "krb-trail-style";
 let restoreTimer;
+let routePreloadGeneration = 0;
+let viewportRequests = 0;
+let routePreloadWork = Promise.resolve();
 let mapReady = false;
 function updatePanelReadiness() {
 	const panel = document.querySelector("#krb-panel");
@@ -27,7 +30,7 @@ function installMapBridge() {
 }
 
 function sendMapConfig(rules, options, colours) {
-  window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, colours, showHazards: options.showHazards, squadratsOpacity: options.squadratsOpacity, visualsEnabled: options.visualsEnabled !== false, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
+  window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, colours, showHazards: options.showHazards, preloadRouteHazards: options.preloadRouteHazards === true, squadratsOpacity: options.squadratsOpacity, visualsEnabled: options.visualsEnabled !== false, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
 }
 
 window.addEventListener("message", async function (event) {
@@ -36,15 +39,35 @@ window.addEventListener("message", async function (event) {
 		mapReady = event.data.detail?.ready === true && !event.data.detail?.error;
 		updatePanelReadiness();
 	}
+	if (event.data?.type === "KRB_PRELOAD_ROUTE") {
+		const generation = ++routePreloadGeneration;
+		const areas = Array.isArray(event.data.areas) ? event.data.areas.slice(0, 8) : [];
+		routePreloadWork = routePreloadWork.catch((error) => console.debug("OSM preload queue reset:", error.message)).then(async function () {
+			for (const bounds of areas) {
+				await new Promise((resolve) => setTimeout(resolve, 1500));
+				while (viewportRequests && generation === routePreloadGeneration) await new Promise((resolve) => setTimeout(resolve, 250));
+				if (generation !== routePreloadGeneration) return;
+				const options = await contentSettings.getOptions();
+				if (!options.preloadRouteHazards || !options.showHazards || options.visualsEnabled === false) return;
+				try {
+					const result = await globalThis.KrbBrowser.runtime.sendMessage({ type: "KRB_LOAD_HAZARDS", bounds, prefetch: true });
+					if (result?.error) return; // Stop on failure; never hammer a throttled provider.
+				}
+				catch (error) { console.debug("OSM route preload stopped:", error.message); return; }
+			}
+		});
+	}
 	if (event.data?.type === "KRB_HAZARD_VIEW") {
 		const { bounds, requestId } = event.data;
 		const options = await contentSettings.getOptions();
 		if (options.visualsEnabled === false || !options.showHazards) return;
 		try {
+			viewportRequests++;
 			const result = await globalThis.KrbBrowser.runtime.sendMessage({ type: "KRB_LOAD_HAZARDS", bounds });
 			window.postMessage({ type: "KRB_HAZARD_DATA", requestId, ...result }, location.origin);
 		}
 		catch (error) { window.postMessage({ type: "KRB_HAZARD_DATA", requestId, error: error.message }, location.origin); }
+		finally { viewportRequests--; }
 	}
 	if (event.data?.type === "KRB_HAZARD_TOOLTIP") {
 		let tooltip = document.querySelector("#krb-hazard-tooltip");
@@ -582,10 +605,10 @@ async function refresh(shouldRestore = false, previewColours, squadratsOpacity) 
 
 globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender) {
 	if (sender.id === globalThis.KrbBrowser.runtime.id && message?.type === "KRB_RELOAD_HAZARDS") {
+		routePreloadGeneration++;
 		window.postMessage({ type: "KRB_RELOAD_HAZARDS" }, location.origin);
 		return;
 	}
-
 	if (sender.id === globalThis.KrbBrowser.runtime.id && message?.type === "KRB_PREVIEW_SQUADRATS" &&
 		Number.isFinite(message.opacity) && message.opacity >= 0 && message.opacity <= 100) {
 		return refresh(false, undefined, message.opacity);

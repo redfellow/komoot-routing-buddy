@@ -57,3 +57,11 @@ The extension stores your local preferences in the browser and reads the page st
 Technical build, test, and release information has been moved to [READMORE.md](READMORE.md). The release checklist and distribution notes are also documented in [docs/RELEASING.md](docs/RELEASING.md).
 
 New OSM queries include up to a 20% margin on each side within the 25 km² limit. Cached areas serve any fully contained viewport, including nearby pans and zooms. Counts refer to the returned cached area. Successful OSM results are cached locally for 7 days (bounded to 12 areas and a size limit). Failed responses are not cached. Use Clear OSM cache in settings to discard stored results and reload the current view. The floater header shows loading, completed, and throttled request states and the number of distinct mapped hazard features. The detailed count uses under 1 metre for narrow trails; categories can overlap.
+
+Optional **Preload hazards along route** caches up to eight roughly 1km route cells
+with a 300m margin, starting near the current map view. Queries run sequentially
+after route edits settle; viewport requests take priority between preloads.
+Queued areas are replaced after route edits or panning, and preloading stops on
+API errors. Adjacent cached areas can jointly satisfy a viewport request.
+Only area bounds are sent to the existing OSM providers; enabling this option
+can send bounds outside the visible map. It is off by default.

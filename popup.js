@@ -145,6 +145,7 @@ async function saveOptions() {
       ...existing,
       maximumTrailLevel: document.querySelector("#maximumLevel").value,
       showHazards: document.querySelector("#showHazards").checked,
+		preloadRouteHazards: document.querySelector("#preloadRouteHazards").checked,
       rememberLayers: document.querySelector("#rememberLayers").checked
     }
   });
@@ -161,6 +162,7 @@ document.querySelector("#restore").addEventListener("click", async function () {
   render(popupSettings.DEFAULT_RULES, popupSettings.HIGHLIGHT_COLOURS);
   document.querySelector("#maximumLevel").value = popupSettings.DEFAULT_OPTIONS.maximumTrailLevel;
   document.querySelector("#showHazards").checked = popupSettings.DEFAULT_OPTIONS.showHazards;
+	document.querySelector("#preloadRouteHazards").checked = false;
   document.querySelector("#rememberLayers").checked = popupSettings.DEFAULT_OPTIONS.rememberLayers;
   status.textContent = "Suggested rules restored.";
 });
@@ -232,6 +234,8 @@ async function initialise() {
 	slider.addEventListener("change", saveSquadrats);
   document.querySelector("#maximumLevel").value = options.maximumTrailLevel;
   document.querySelector("#showHazards").checked = options.showHazards;
+	document.querySelector("#preloadRouteHazards").checked = options.preloadRouteHazards === true;
+	document.querySelector("#preloadRouteHazards").addEventListener("change", saveOptions);
   document.querySelector("#showHazards").addEventListener("change", saveOptions);
   document.querySelector("#rememberLayers").checked = options.rememberLayers;
   document.querySelector("#maximumLevel").addEventListener("change", saveOptions);

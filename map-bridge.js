@@ -324,6 +324,8 @@
 		applying = true;
 		try {
 			applySquadrats();
+			const preload = config.preloadRouteHazards === true && config.showHazards === true && config.visualsEnabled !== false;
+			if (preload !== routePreloadEnabled) { routePreloadEnabled = preload; scheduleRoutePreload(); }
 			const hazardsAllowed = config.showHazards === true && config.visualsEnabled !== false;
 			if (hazardEnabled !== hazardsAllowed) {
 				hazardEnabled = hazardsAllowed;
@@ -463,6 +465,55 @@
 		scheduleHazards();
 	});
 
+	function routeAreas(geojson, center) {
+		const features = geojson?.type === "FeatureCollection" ? geojson.features : geojson?.type === "Feature" ? [geojson] : [];
+		const latStep = 0.009; // Roughly 1km cells, with a 300m margin.
+		const lonStep = latStep / Math.max(0.1, Math.cos(center[1] * Math.PI / 180));
+		const areas = new Map();
+		let samples = 0;
+		function add(point) {
+			const x = Math.floor(point[0] / lonStep), y = Math.floor(point[1] / latStep);
+			const key = `${x},${y}`;
+			if (!areas.has(key)) areas.set(key, [(y - 0.3) * latStep, (x - 0.3) * lonStep, (y + 1.3) * latStep, (x + 1.3) * lonStep]);
+		}
+		for (const feature of features || []) {
+			const g = feature.geometry;
+			const lines = g?.type === "LineString" ? [g.coordinates] : g?.type === "MultiLineString" ? g.coordinates : [];
+			for (const line of lines) {
+				let previous;
+				for (const point of line) {
+					if (!Array.isArray(point) || !point.slice(0, 2).every(Number.isFinite) || Math.abs(point[0]) > 179 || Math.abs(point[1]) > 84) { previous = undefined; continue; }
+					const steps = previous ? Math.ceil(Math.max(Math.abs(point[0] - previous[0]) / lonStep, Math.abs(point[1] - previous[1]) / latStep) * 5) : 1;
+					for (let i = 1; i <= Math.max(1, steps) && samples < 20000; i++, samples++) {
+						add(previous ? [previous[0] + (point[0] - previous[0]) * i / Math.max(1, steps), previous[1] + (point[1] - previous[1]) * i / Math.max(1, steps)] : point);
+					}
+					previous = point;
+					if (samples >= 20000) break;
+				}
+				if (samples >= 20000) break;
+			}
+			if (samples >= 20000) break;
+		}
+		const distance = (b) => ((b[1] + b[3]) / 2 - center[0]) ** 2 / lonStep ** 2 + ((b[0] + b[2]) / 2 - center[1]) ** 2 / latStep ** 2;
+		return [...areas.values()].sort((a, b) => distance(a) - distance(b)).slice(0, 8);
+	}
+	let routePreloadTimer;
+	let routePreloadEnabled = false;
+	function scheduleRoutePreload() {
+		clearTimeout(routePreloadTimer);
+		window.postMessage({ type: "KRB_PRELOAD_ROUTE", areas: [] }, location.origin);
+		if (!routePreloadEnabled || !map) return;
+		routePreloadTimer = setTimeout(function () {
+			if (!map || !routePreloadEnabled) return;
+			const b = map.getBounds();
+			const route = map.getSource("komoot_tour")?._data;
+			window.postMessage({ type: "KRB_PRELOAD_ROUTE", areas: routeAreas(route, [(b.getWest() + b.getEast()) / 2, (b.getSouth() + b.getNorth()) / 2]) }, location.origin);
+		}, 2000);
+	}
+	function onRoutePreloadSource(event) {
+		if (event.sourceId === "komoot_tour" && event.sourceDataType === "content") scheduleRoutePreload();
+	}
+
 	const squadratsRouteSources = ["squadrats-new-squadrats", "squadrats-new-squadratinhos"];
 	let squadratsWait;
 	let squadratsFallback;
@@ -522,6 +573,10 @@
 			map.off("styledata", scheduleApply);
 			map.off("idle", scheduleApply);
 			map.off("sourcedata", onSquadratsSource);
+			map.off("sourcedata", onRoutePreloadSource);
+			map.off("moveend", scheduleRoutePreload);
+			routePreloadEnabled = false;
+			scheduleRoutePreload();
 			clearSquadratsWait();
 			clearTimeout(scheduled);
 			scheduled = undefined;
@@ -559,6 +614,8 @@
 		map.on("styledata", scheduleApply);
 		map.on("idle", scheduleApply);
 		map.on("sourcedata", onSquadratsSource);
+		map.on("sourcedata", onRoutePreloadSource);
+		map.on("moveend", scheduleRoutePreload);
 		map.on("moveend", scheduleHazards);
 		map.on("mousemove", showHazardTooltip);
 		map.on("click", showHazardTooltip);

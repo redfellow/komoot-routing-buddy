@@ -13,6 +13,7 @@ const DEFAULT_RULES = {
 const DEFAULT_OPTIONS = {
 	visualsEnabled: true,
 	showHazards: true,
+	preloadRouteHazards: false,
 	squadratsOpacity: 100,
   maximumTrailLevel: "S5",
   rememberLayers: true,

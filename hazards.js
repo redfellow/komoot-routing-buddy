@@ -144,7 +144,29 @@
 		})().finally(function () { clearing = undefined; });
 		return clearing;
 	}
-	async function load(bounds) {
+	function cachedCoverage(bounds) {
+		let uncovered = [bounds];
+		const selected = [];
+		for (const entry of [...cache.values()].reverse()) {
+			if (Date.now() - entry.time >= CACHE_TTL) continue;
+			const box = entry.key.split(",").map(Number);
+			let used = false;
+			uncovered = uncovered.flatMap(function (b) {
+				const s = Math.max(b[0], box[0]), w = Math.max(b[1], box[1]), n = Math.min(b[2], box[2]), e = Math.min(b[3], box[3]);
+				if (s >= n || w >= e) return [b];
+				used = true;
+				return [[b[0], b[1], s, b[3]], [n, b[1], b[2], b[3]], [s, b[1], n, w], [s, e, n, b[3]]].filter((r) => r[0] < r[2] && r[1] < r[3]);
+			});
+			if (used) selected.push(entry);
+			if (!uncovered.length) {
+				const unique = new Map();
+				for (const hit of selected) for (const feature of hit.data.features) unique.set(feature.properties?.osmId || feature.id, feature);
+				const features = [...unique.values()];
+				return { type: "FeatureCollection", features, counts: countFeatures(features) };
+			}
+		}
+	}
+	async function load(bounds, prefetch = false) {
 		if (clearing) await clearing;
 		boundsKey(bounds);
 		await readCache();
@@ -163,13 +185,19 @@
 				return hit.data;
 			}
 		}
+		const combined = cachedCoverage(bounds);
+		if (combined) return combined;
 		if (active) {
+			if (!prefetch && active.prefetch) {
+				await active.promise.catch((error) => console.debug("OSM preload ended before viewport request:", error.message));
+				return load(bounds);
+			}
 			if (contains(active.bounds, bounds)) return active.promise;
 			throw Object.assign(new Error("Another OSM area is loading"), { retryMs: 30000 });
 		}
 		const area = expandedBounds(bounds);
 		const promise = fetchProviders(boundsKey(area));
-		active = { bounds: area, promise };
+		active = { bounds: area, promise, prefetch };
 		try { return await promise; }
 		finally { active = undefined; }
 	}

@@ -577,3 +577,16 @@ test("Squadrats source completion gates styling with a bounded fallback", functi
 	advance(4000);
 	assert.equal(applied, 2, "detaching the map cancels the fallback");
 });
+
+test("route preloading samples sparse segments, prioritises nearby cells and bounds work", function () {
+	const code = source.slice(source.indexOf("function routeAreas("), source.indexOf("let routePreloadTimer;"));
+	const context = {};
+	runInNewContext(code, context);
+	const geojson = { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "LineString", coordinates: [[23, 61], [24, 61]] } }] };
+	const areas = context.routeAreas(geojson, [23.5, 61]);
+	assert.equal(areas.length, 8);
+	assert.ok(areas[0][1] < 23.5 && areas[0][3] > 23.5);
+	assert.ok(areas.every((b) => b[0] < 61 && b[2] > 61 && b[3] - b[1] < 0.04));
+	assert.equal(context.routeAreas(undefined, [23, 61]).length, 0);
+	assert.equal(context.routeAreas({ type: "Feature", geometry: { type: "Point", coordinates: [23, 61] } }, [23, 61]).length, 0);
+});
