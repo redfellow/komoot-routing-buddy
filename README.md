@@ -7,6 +7,7 @@ It adds visual cues directly to the map so difficult sections stand out at a gla
 ## Features
 
 - Highlights trail difficulty directly on the map
+- Shows hazard overlays for muddy, narrow, and other mapped trail issues
 - Lets you choose which difficulty levels are shown
 - Supports custom colors for each trail difficulty
 - Adds a clear warning style for the hardest sections
@@ -14,15 +15,18 @@ It adds visual cues directly to the map so difficult sections stand out at a gla
 - Lets you switch back to the original Komoot styling whenever you want
 - Works with the main planning and editing views in Komoot
 
+## Known Issues
+
+- OpenStreetMap Overseer API is often overloaded, which can make trail hazard data take a long time to load, sometimes several minutes.
+- Because of this, the loading status is shown in the floating window so you can see whether hazard data is still being fetched or is delayed.
+
 ## Preview
 
-### Enabled
+### Colors & Hazards enabled
 
-![Enabled view](enabled.png)
-
-### Disabled
-
-![Disabled view](disabled.png)
+![Enabled view](hazards.png)
+- Showing muddy, narrow & custom coloured trails
+- Dots in the trail line mean the trail contains one ore more hazards
 
 ## Install
 
