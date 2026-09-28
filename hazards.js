@@ -1,7 +1,7 @@
 // Shared background-side OSM acquisition and normalisation.
 (function () {
 	const cache = new Map();
-	const CACHE_TTL = 30 * 60 * 1000;
+	const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 	const CACHE_KEY = "osmHazardsCacheV4";
 	let cacheReady;
 	const providers = [
@@ -132,7 +132,20 @@
 		return counts;
 	}
 
+	let clearing;
+	function clearCache() {
+		if (clearing) return clearing;
+		clearing = (async function () {
+			await readCache();
+			// Let an existing request settle so it cannot repopulate a cleared cache.
+			if (active) await active.promise.catch((error) => console.debug("OSM request ended while clearing:", error.message));
+			cache.clear();
+			await globalThis.KrbBrowser.storage.local.set({ [CACHE_KEY]: [] });
+		})().finally(function () { clearing = undefined; });
+		return clearing;
+	}
 	async function load(bounds) {
+		if (clearing) await clearing;
 		boundsKey(bounds);
 		await readCache();
 		for (const hit of [...cache.values()].reverse()) {
@@ -235,5 +248,5 @@
 			throw error;
 		}
 	}
-	globalThis.KrbHazards = { load, convert, boundsKey, expandedBounds, identifyRequests, countFeatures };
+	globalThis.KrbHazards = { load, clearCache, convert, boundsKey, expandedBounds, identifyRequests, countFeatures };
 })();

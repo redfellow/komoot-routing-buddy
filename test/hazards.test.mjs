@@ -79,7 +79,7 @@ test("identification rule is installed once and scoped to this extension and end
 	assert.match(rule.action.requestHeaders[0].value, /^KomootRoutingBuddy\/1.2.0/);
 });
 
-test("persistent cache survives background restarts and expires after 30 minutes", async function () {
+test("persistent cache survives background restarts and expires after 7 days", async function () {
 	let stored = {};
 	let now = 1000000;
 	let calls = 0;
@@ -97,7 +97,7 @@ test("persistent cache survives background restarts and expires after 30 minutes
 	const bounds = [61, 23, 61.01, 23.01];
 	await restart().load(bounds);
 	assert.equal(calls, 1);
-	now += 29 * 60000;
+	now += (7 * 24 * 60 - 1) * 60000;
 	await restart().load(bounds);
 	assert.equal(calls, 1);
 	now += 60001;
@@ -242,4 +242,26 @@ test("narrow icons require a positive measured width at most half a metre", func
 		assert.equal(p.icon_narrow, expected);
 		assert.equal(p.icon_other, false);
 	}
+});
+
+test("clearing OSM removes persistent and memory results and forces a fresh request", async function () {
+	let stored = {};
+	let calls = 0;
+	const context = { console, URL, URLSearchParams, AbortSignal, TextDecoder,
+		KrbBrowser: { storage: { local: {
+			async get() { return structuredClone(stored); },
+			async set(value) { stored = structuredClone(value); }
+		} } },
+		async fetch() { calls++; return new Response(JSON.stringify({ elements: [way] })); }
+	};
+	runInNewContext(source, context);
+	const api = context.KrbHazards;
+	const bounds = [61, 23, 61.01, 23.01];
+	await api.load(bounds);
+	await api.load(bounds);
+	assert.equal(calls, 1);
+	await api.clearCache();
+	assert.equal(Object.values(stored)[0].length, 0);
+	await api.load(bounds);
+	assert.equal(calls, 2);
 });

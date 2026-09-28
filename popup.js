@@ -197,6 +197,23 @@ async function saveSquadrats() {
 }
 
 async function initialise() {
+	document.querySelector("#clearOsmCache").addEventListener("click", async function (event) {
+		const button = event.currentTarget;
+		button.disabled = true;
+		status.textContent = "Clearing OSM cache…";
+		try {
+			const result = await globalThis.KrbBrowser.runtime.sendMessage({ type: "KRB_CLEAR_OSM_CACHE" });
+			if (!result?.ok) throw new Error(result?.error || "Cache clear failed");
+			status.textContent = "OSM cache cleared.";
+			const [tab] = await globalThis.KrbBrowser.tabs.query({ active: true, currentWindow: true });
+			if (tab?.id) {
+				try { await globalThis.KrbBrowser.tabs.sendMessage(tab.id, { type: "KRB_RELOAD_HAZARDS" }); }
+				catch (error) { console.debug("OSM refresh unavailable:", error.message); }
+			}
+		}
+		catch (error) { status.textContent = `Could not clear OSM cache: ${error.message}`; }
+		finally { button.disabled = false; }
+	});
 	for (const help of document.querySelectorAll(".help")) {
 		help.addEventListener("pointerenter", function (event) {
 			if (event.pointerType === "mouse") help.open = true;

@@ -23,3 +23,11 @@ globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender, s
 	}).then((data) => sendResponse({ data })).catch((error) => sendResponse({ error: error.message, retryMs: error.retryMs, status: error.status, exhausted: error.exhausted }));
 	return true;
 });
+
+
+globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+	if (message?.type !== "KRB_CLEAR_OSM_CACHE" || sender.id !== globalThis.KrbBrowser.runtime.id) return;
+	globalThis.KrbHazards.clearCache().then(() => sendResponse({ ok: true }))
+		.catch((error) => sendResponse({ ok: false, error: error.message }));
+	return true;
+});

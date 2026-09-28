@@ -581,6 +581,11 @@ async function refresh(shouldRestore = false, previewColours, squadratsOpacity) 
 }
 
 globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender) {
+	if (sender.id === globalThis.KrbBrowser.runtime.id && message?.type === "KRB_RELOAD_HAZARDS") {
+		window.postMessage({ type: "KRB_RELOAD_HAZARDS" }, location.origin);
+		return;
+	}
+
 	if (sender.id === globalThis.KrbBrowser.runtime.id && message?.type === "KRB_PREVIEW_SQUADRATS" &&
 		Number.isFinite(message.opacity) && message.opacity >= 0 && message.opacity <= 100) {
 		return refresh(false, undefined, message.opacity);

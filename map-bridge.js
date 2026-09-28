@@ -454,6 +454,15 @@
 		window.postMessage({ type: "KRB_MAP_STATUS", detail }, location.origin);
 	}
 
+	window.addEventListener("message", function (event) {
+		if (event.source !== window || event.origin !== location.origin || event.data?.type !== "KRB_RELOAD_HAZARDS") return;
+		if (!map || !hazardEnabled) return;
+		hazardKey = undefined;
+		hazardData = undefined;
+		removeHazards();
+		scheduleHazards();
+	});
+
 	const squadratsRouteSources = ["squadrats-new-squadrats", "squadrats-new-squadratinhos"];
 	let squadratsWait;
 	let squadratsFallback;
