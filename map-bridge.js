@@ -316,8 +316,9 @@
 		applying = true;
 		try {
 			applySquadrats();
-			if (hazardEnabled !== (config.showHazards === true)) {
-				hazardEnabled = config.showHazards === true;
+			const hazardsAllowed = config.showHazards === true && config.visualsEnabled !== false;
+			if (hazardEnabled !== hazardsAllowed) {
+				hazardEnabled = hazardsAllowed;
 				hazardKey = undefined;
 				hazardRequest++;
 				if (hazardEnabled) scheduleHazards();

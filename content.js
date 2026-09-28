@@ -26,7 +26,8 @@ window.addEventListener("message", async function (event) {
 	if (event.source !== window || event.origin !== location.origin) return;
 	if (event.data?.type === "KRB_HAZARD_VIEW") {
 		const { bounds, requestId } = event.data;
-		if (!(await contentSettings.getOptions()).showHazards) return;
+		const options = await contentSettings.getOptions();
+		if (options.visualsEnabled === false || !options.showHazards) return;
 		try {
 			const result = await globalThis.KrbBrowser.runtime.sendMessage({ type: "KRB_LOAD_HAZARDS", bounds });
 			window.postMessage({ type: "KRB_HAZARD_DATA", requestId, ...result }, location.origin);

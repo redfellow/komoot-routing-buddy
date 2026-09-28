@@ -385,13 +385,15 @@ test("visible MTB labels do not suppress base trail colouring when MTB lines are
 test("hazard overlays survive restyling, remain independent and ignore replies after disabling", function () {
 	const f = fixture();
 	f.configure({ showHazards: true, visualsEnabled: false });
+	assert.equal(f.messages.some((message) => message.type === "KRB_HAZARD_VIEW"), false);
+	assert.equal(f.sources.has("krb-conditions"), false);
+	f.configure({ showHazards: true, visualsEnabled: true });
 	const request = f.messages.find((message) => message.type === "KRB_HAZARD_VIEW");
 	assert.ok(request);
 	f.reply({ type: "KRB_HAZARD_DATA", requestId: request.requestId, data: { type: "FeatureCollection", features: [] } });
 	assert.equal(f.sources.has("krb-conditions"), true);
 	const original = copy(f.layers.filter((layer) => layer.id.startsWith("krb-conditions")));
 	assert.equal(original.length, 12);
-	f.configure({ showHazards: true, visualsEnabled: true });
 	f.restyle();
 	assert.deepEqual(f.layers.filter((layer) => layer.id.startsWith("krb-conditions")), original);
 	f.layers.splice(f.layers.findIndex((layer) => layer.id === "krb-conditions-line"), 1);
