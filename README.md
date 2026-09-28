@@ -25,8 +25,13 @@ It adds visual cues directly to the map so difficult sections stand out at a gla
 ### Colors & Hazards enabled
 
 ![Enabled view](hazards.png)
-- Showing muddy, narrow & custom coloured trails
-- Dots in the trail line mean the trail contains one ore more hazards
+- Showing muddy, narrow & custom coloured trails, satellite map
+- Dotted trail line means that the trail contains one ore more hazards
+
+### Only trail colors enabled
+
+![Enabled view](only-trails.png)
+- Showing only S0-S3 trails with custom colors, default map
 
 ## Install
 
