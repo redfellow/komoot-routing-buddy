@@ -95,12 +95,13 @@ function renderHazardStatus(data) {
 		const panel = document.querySelector("#krb-panel");
 		if (!panel) return;
 		const indicator = panel.querySelector(".krb-panel__osm");
-		const icons = { loading: "", finished: "✓", throttled: "⌛", error: "!", idle: "—" };
+		const icons = { loading: "", finished: "✓", throttled: "", error: "!", idle: "—" };
 		const state = Object.hasOwn(icons, data.state) ? data.state : "idle";
 		indicator.dataset.state = state;
 		indicator.hidden = data.text === "";
 		const icon = indicator.querySelector(".krb-panel__osm-icon");
 		if (state === "loading") icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M 20 12 A 8 8 0 1 1 12 4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>';
+		else if (state === "throttled") icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="1" width="12" height="22" rx="4" fill="#26312c"/><circle cx="12" cy="6" r="3" fill="#ff4545" stroke="#ffaaaa" stroke-width="0.7"/><circle cx="12" cy="12" r="2.5" fill="#555247"/><circle cx="12" cy="18" r="2.5" fill="#3b5045"/></svg>';
 		else icon.textContent = icons[state];
 		const total = data.counts?.total;
 		indicator.querySelector(".krb-panel__osm-count").textContent = Number.isInteger(total) && total >= 0 ? String(total) : "";
