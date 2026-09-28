@@ -20,6 +20,6 @@ globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender, s
 	globalThis.KrbBrowser.storage.sync.get("trailOptions").then(function (saved) {
 		if (saved.trailOptions?.showHazards === false) throw new Error("Hazards disabled");
 		return globalThis.KrbHazards.load(message.bounds);
-	}).then((data) => sendResponse({ data })).catch((error) => sendResponse({ error: error.message, retryMs: error.retryMs }));
+	}).then((data) => sendResponse({ data })).catch((error) => sendResponse({ error: error.message, retryMs: error.retryMs, status: error.status, exhausted: error.exhausted }));
 	return true;
 });

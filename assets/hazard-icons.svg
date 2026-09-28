@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="140" height="28" viewBox="0 0 140 28">
+<defs><rect id="badge" x="1" y="1" width="26" height="26" rx="6" fill="#fff9ed" stroke="#3c3022" stroke-width="1.5"/></defs>
+<g stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+<use href="#badge"/><g stroke="#86451f" fill="none"><ellipse cx="14" cy="19" rx="8" ry="3"/><path d="M10 6q-5 6 0 6q5 0 0-6Zm9 3q-4 5 0 5q4 0 0-5Z" fill="#86451f"/></g>
+<g transform="translate(28)"><use href="#badge"/><g stroke="#246d36" fill="none"><path d="M8 22 20 6M13 16Q3 15 6 7q9 0 7 9ZM15 13q-1-9 8-9 2 8-8 9Z" fill="#62a755"/></g></g>
+<g transform="translate(56)"><use href="#badge"/><g stroke="#285e88" fill="none"><path d="M12 5v18M16 5v18M3 14h6m-3-3 3 3-3 3m19-3h-6m3-3-3 3 3 3"/></g></g>
+<g transform="translate(84)"><use href="#badge"/><path d="m14 5 10 18H4Z" fill="#efb343" stroke="#704410"/><path d="M14 11v5m0 3v.2" stroke="#332819"/></g>
+<g transform="translate(112)"><use href="#badge"/><path d="M6 9 20 6q6 6 1 13L8 22Z" fill="#b8773c" stroke="#633919"/><ellipse cx="8" cy="16" rx="4" ry="6" fill="#f1cb8a" stroke="#633919"/><ellipse cx="8" cy="16" rx="1.5" ry="3" fill="none" stroke="#633919"/><path d="m14 10 6-2m-5 7 7-2" stroke="#633919"/></g></g></svg>
