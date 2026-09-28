@@ -50,8 +50,10 @@ It adds visual cues directly to the map so difficult sections stand out at a gla
 
 ## Privacy and data handling
 
-The extension stores your local preferences in the browser and reads the page state needed to apply the visual styling. It does not upload routes or personal ride data to a remote service. Show hazards is enabled by default: at close zoom levels it sends the viewed map bounding box to `overpass-api.de` to retrieve OpenStreetMap obstacles, vegetation, mud, warnings and width data. The provider also receives normal network metadata such as your IP address. Turn off Show hazards in settings to stop these lookups. Missing tags mean unknown conditions; this is not live trail-condition reporting.
+The extension stores your local preferences in the browser and reads the page state needed to apply the visual styling. It does not upload routes or personal ride data to a remote service. Show hazards is enabled by default: at close zoom levels it sends the viewed map bounding box sequentially to Private.coffee, VK Maps (`maps.mail.ru`), or `overpass-api.de` to retrieve OpenStreetMap obstacles, vegetation, mud, warnings and width data. The provider also receives normal network metadata such as your IP address. Turn off Show hazards in settings to stop these lookups. Missing tags mean unknown conditions; this is not live trail-condition reporting.
 
 ## For developers and maintainers
 
 Technical build, test, and release information has been moved to [READMORE.md](READMORE.md). The release checklist and distribution notes are also documented in [docs/RELEASING.md](docs/RELEASING.md).
+
+New OSM queries include up to a 20% margin on each side within the 25 km² limit. Cached areas serve any fully contained viewport, including nearby pans and zooms. Counts refer to the returned cached area. Successful OSM results are cached locally for 30 minutes (bounded to 12 areas and a size limit). Failed responses are not cached. The floater header shows loading, completed, and throttled request states and the number of distinct mapped hazard features. The detailed count uses under 1 metre for narrow trails; categories can overlap.

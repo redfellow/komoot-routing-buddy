@@ -121,3 +121,70 @@ evidence of missing tags. No local coverage counts have been established yet.
 - [Chrome cross-origin requests](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests)
 - [Firefox content script networking](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Content_scripts)
 - [OSM attribution and licence](https://www.openstreetmap.org/copyright)
+
+## Live investigation — 2026-09-24
+
+- The existing development branch was already clean and pushed at `575c146`.
+- A real identified Overpass request for bbox south=61.49, west=23.75,
+  north=61.50, east=23.76 succeeded and returned two MTB-rated ways, neither
+  carrying the requested condition fields.
+- The production query for the test map area (61.5064,23.7825,61.5168,23.8092)
+  initially returned HTTP 504, then succeeded: the existing converter produced
+  438 features with condition or width information. Examples include muddy way
+  261587939, vegetation on way 1063593746 and fallen-tree node 5055772930.
+  This is a feature count, not a count of hazards: many features contain only width.
+- Sampled live Komoot rendered MTB trail properties were access_bike_forward,
+  access_foot_forward, bicycle, bridge, foot, highway, layer, mtb_scale,
+  mtb_scale_uphill, service and tracktype. No obstacle, overgrown, hazard or width
+  fields were observed. Numeric feature IDs exist, but their equivalence to OSM
+  IDs has not been established; do not join on them yet.
+- Chromium may discard a User-Agent supplied directly to fetch. The extension now
+  installs a declarative request-header rule before fetching. It identifies only
+  this extension's POST/XHR requests to the exact Overpass interpreter URL, using
+  the extension's origin as the initiator filter. Unrelated traffic is untouched.
+  This requires declarativeNetRequestWithHostAccess in addition to the existing
+  narrowly scoped Overpass host permission.
+- After reloading the development extension and route, Brave reached HTTP 504
+  rather than 406 and displayed its scheduled retry. Service availability remains
+  variable. Successful Node-side data acquisition alone is not visual validation.
+- Concurrent requests for another viewport now supply retry metadata instead of
+  leaving that viewport stuck without an automatic retry.
+
+Header API reference: https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest
+
+## Buffered caching and provider fallback
+
+Implemented Private.coffee → VK Maps → overpass-api.de sequential fallback.
+Each instance receives at most one attempt per lookup, has its own minimum
+30-second cooldown, and honours longer Retry-After responses. A 400/401/403/406
+stops that lookup; transient failures can advance to the next available provider.
+After exhausting the list, automatic map retry cycles stop; subsequent user map
+activity can retry available providers. Cache hits do not make network requests.
+The fixed provider list is covered by narrow host permissions and per-origin
+request identification rules. Provider selection follows the public instance
+listing: https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances
+
+Successful area responses persist for 30 minutes. A new viewport contained in a
+cached area reuses it. New queries add 20% per side where possible, then 10%, then
+no buffer to preserve the 25 km² cap. Bounds are no longer rounded inward. Header
+counts describe the entire returned cached area, not just the current viewport.
+No change to OSM feature geometry is made, and failed responses are never cached.
+
+### Live rendering fix (2026-09-28)
+
+Verified in Brave on the test route: the GeoJSON source contained 205 features,
+80 intersecting the viewport, but the hazard layers rendered zero features.
+The label layer omitted `text-font`, causing a request for MapLibre's default
+Open Sans/Arial stack against Komoot's glyph endpoint, which returned HTTP 403.
+Setting the font alone did not recover already failed source tiles. Recreating
+the source with the host style's Satoshi Regular font rendered 99 line/point/label
+features in the same view (rendered counts can include tile fragments and labels).
+The bridge now selects a literal font stack from the host's symbol layers. If
+none is available, it draws lines and points and defers labels instead of
+requesting the unsupported default font. Fresh page loads use the corrected
+font before the source's tiles are processed.
+
+After rebuilding and reloading the unpacked extension, a fresh Komoot page load
+visually confirmed orange dotted trail overlays, orange point markers, and width
+labels without console modifications. Chrome/Firefox packaging passed all 59
+tests and Firefox lint reported no warnings or errors.
