@@ -48,10 +48,13 @@
 		try { await globalThis.KrbBrowser?.storage?.local.set({ [CACHE_KEY]: [...cache.values()] }); }
 		catch (error) { console.warn("OSM cache write failed:", error); }
 	}
+	function widthMetres(tags) {
+		const match = String(tags.width || tags.est_width || "").trim().match(/^(\d+(?:\.\d+)?)\s*(m|cm|ft)?$/);
+		return match ? Number(match[1]) * (match[2] === "cm" ? 0.01 : match[2] === "ft" ? 0.3048 : 1) : undefined;
+	}
 	function categories(tags) {
 		const positive = (value) => typeof value === "string" && value !== "" && !["no", "none", "false"].includes(value);
-		const width = String(tags.width || tags.est_width || "").match(/^(\d+(?:\.\d+)?)\s*(m|cm|ft)?$/);
-		const metres = width ? Number(width[1]) * (width[2] === "cm" ? 0.01 : width[2] === "ft" ? 0.3048 : 1) : undefined;
+		const metres = widthMetres(tags);
 		return {
 			mud: tags.surface?.split(";").includes("mud") || tags.obstacle?.split(";").includes("mud") || false,
 			vegetation: tags.obstacle?.split(";").includes("vegetation") || positive(tags.overgrown),
@@ -62,8 +65,10 @@
 	}
 	function iconDetails(tags) {
 		const flags = categories(tags);
+		const width = widthMetres(tags);
+		flags.narrow = Number(width) > 0 && Number(width) <= 0.5;
 		const specific = ["mud", "vegetation", "narrow", "log"].filter((key) => flags[key]);
-		const icons = specific.length ? specific : flags.other ? ["other"] : [];
+		const icons = specific.length ? specific : flags.other && !categories(tags).narrow ? ["other"] : [];
 		const tips = { mud: "Muddy surface", vegetation: "Vegetation" + (tags.overgrown ? ` · Overgrown: ${tags.overgrown}` : ""),
 			narrow: widthLabel(tags) ? `Width: ${widthLabel(tags)}` : "Narrow trail", log: "Log / fallen tree", other: describe(tags) };
 		return Object.fromEntries(["mud", "vegetation", "narrow", "log", "other"].flatMap((key) => [
@@ -108,7 +113,7 @@
 			const id = `${element.type}/${element.id}`;
 			if (seen.has(id)) return;
 			seen.add(id);
-			features.push({ type: "Feature", id, properties: { label, ...iconDetails(element.tags || {}), widthLabel: geometry.type === "LineString" ? widthLabel(element.tags || {}) : "", trailRating: geometry.type === "LineString" ? `S${element.tags["mtb:scale"]}` : "", osmId: id, ...categories(element.tags || {}) }, geometry });
+			features.push({ type: "Feature", id, properties: { label, widthMetres: widthMetres(element.tags || {}), ...iconDetails(element.tags || {}), widthLabel: geometry.type === "LineString" ? widthLabel(element.tags || {}) : "", trailRating: geometry.type === "LineString" ? `S${element.tags["mtb:scale"]}` : "", osmId: id, ...categories(element.tags || {}) }, geometry });
 		}
 		return { type: "FeatureCollection", features, counts: countFeatures(features) };
 	}
@@ -132,6 +137,15 @@
 		await readCache();
 		for (const hit of [...cache.values()].reverse()) {
 			if (Date.now() - hit.time < CACHE_TTL && contains(hit.key.split(",").map(Number), bounds)) {
+				// Upgrade cached icon placement without discarding successful geometry.
+				for (const feature of hit.data.features) {
+					const p = feature.properties;
+					const width = p.widthMetres ?? Number(String(p.widthLabel || "").replace(/^≈/, "").replace(/m$/, ""));
+					p.icon_narrow = width > 0 && width <= 0.5;
+					const keys = ["mud", "vegetation", "narrow", "log", "other"];
+					const active = keys.filter((key) => p[`icon_${key}`]);
+					for (const key of keys) p[`offset_${key}`] = (active.indexOf(key) - (active.length - 1) / 2) * 30;
+				}
 				hit.data.counts = countFeatures(hit.data.features);
 				return hit.data;
 			}

@@ -42,3 +42,20 @@ test("OSM status survives early delivery, shows a notched loading arc and restor
 	assert.equal(indicator.hidden, true);
 	assert.equal(footer.hidden, true);
 });
+
+
+test("floater readiness disables interaction until map styling reports ready", function () {
+	const panel = { attributes: {}, classList: { toggle(name, value) { panel.loading = value; } }, setAttribute(name, value) { this.attributes[name] = value; } };
+	const start = source.indexOf("let mapReady = false;");
+	const code = source.slice(start, source.indexOf("let layersRestoredThisLoad", start));
+	const context = { document: { querySelector() { return panel; } } };
+	runInNewContext(code, context);
+	context.updatePanelReadiness();
+	assert.equal(panel.inert, true);
+	assert.equal(panel.loading, true);
+	runInNewContext("mapReady = true; updatePanelReadiness();", context);
+	assert.equal(panel.inert, false);
+	assert.equal(panel.attributes["aria-busy"], "false");
+	runInNewContext("mapReady = false; updatePanelReadiness();", context);
+	assert.equal(panel.inert, true);
+});

@@ -527,6 +527,7 @@
 			hazardData = undefined;
 			hazardKey = undefined;
 			map = undefined;
+			postStatus({ ready: false });
 			originals.clear();
 			squadratsOriginals.clear();
 			searchAttempts = 0;
@@ -554,7 +555,7 @@
 		map.on("click", showHazardTooltip);
 		map.on("movestart", hideHazardTooltip);
 		map.getCanvas().addEventListener?.("mouseleave", hideHazardTooltip);
-		postStatus({ ready: true });
+		postStatus({ ready: false });
 		scheduleApply();
 	}, 1000);
 })();

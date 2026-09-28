@@ -221,7 +221,7 @@ test("compact width labels belong only to rated trails and retain full hover det
 test("specific icons suppress the generic warning and have category-only tooltips", function () {
 	const cases = [
 		[{ obstacle: "vegetation", width: "0.5" }, ["vegetation", "narrow"]],
-		[{ obstacle: "narrow" }, ["narrow"]],
+		[{ obstacle: "narrow" }, []],
 		[{ obstacle: "log" }, ["log"]],
 		[{ surface: "mud" }, ["mud"]],
 		[{ obstacle: "rock" }, ["other"]],
@@ -232,5 +232,14 @@ test("specific icons suppress the generic warning and have category-only tooltip
 		assert.deepEqual(["mud", "vegetation", "narrow", "log", "other"].filter((key) => p[`icon_${key}`]), expected);
 		if (p.icon_vegetation) assert.doesNotMatch(p.tip_vegetation, /Width|log/);
 		if (p.icon_narrow) assert.doesNotMatch(p.tip_narrow, /vegetation/);
+	}
+});
+
+
+test("narrow icons require a positive measured width at most half a metre", function () {
+	for (const [width, expected] of [["0.5", true], ["50 cm", true], ["0.504", false], ["0.51", false], ["0.8", false], ["0", false], [undefined, false]]) {
+		const p = setup().convert([{ ...way, tags: { "mtb:scale": "1", obstacle: "narrow", width } }]).features[0].properties;
+		assert.equal(p.icon_narrow, expected);
+		assert.equal(p.icon_other, false);
 	}
 });

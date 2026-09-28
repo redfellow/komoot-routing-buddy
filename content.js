@@ -5,6 +5,14 @@ const contentSettings = globalThis.KrbSettings;
 const AVOID_COLOUR = "#7a1016";
 const STYLE_ID = "krb-trail-style";
 let restoreTimer;
+let mapReady = false;
+function updatePanelReadiness() {
+	const panel = document.querySelector("#krb-panel");
+	if (!panel) return;
+	panel.inert = !mapReady;
+	panel.setAttribute("aria-busy", String(!mapReady));
+	panel.classList.toggle("krb-panel--loading", !mapReady);
+}
 let layersRestoredThisLoad = false;
 let restoringLayers = false;
 
@@ -24,6 +32,10 @@ function sendMapConfig(rules, options, colours) {
 
 window.addEventListener("message", async function (event) {
 	if (event.source !== window || event.origin !== location.origin) return;
+	if (event.data?.type === "KRB_MAP_STATUS") {
+		mapReady = event.data.detail?.ready === true && !event.data.detail?.error;
+		updatePanelReadiness();
+	}
 	if (event.data?.type === "KRB_HAZARD_VIEW") {
 		const { bounds, requestId } = event.data;
 		const options = await contentSettings.getOptions();
@@ -118,6 +130,7 @@ function createPanel(state) {
   panel.open = state?.open !== false;
   panel.innerHTML = `<summary><span class="krb-panel__drag" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="krb-title"></span><span class="krb-panel__osm" role="status" aria-label="OSM waiting" tabindex="0" data-tooltip="OSM waiting" aria-describedby="krb-osm-tooltip"><span class="krb-panel__osm-icon">—</span><span class="krb-panel__osm-count"></span></span><button type="button" class="krb-panel__toggle" role="switch" aria-checked="true" aria-label="Trail visual changes" title="Toggle trail visual changes">On</button><button type="button" class="krb-panel__settings" aria-label="Open Routing Buddy settings" title="Open settings">⚙</button><span class="krb-caret">⌃</span></summary><div class="krb-legend"></div>`;
   document.documentElement.append(panel);
+	updatePanelReadiness();
 	setupPanelControls(panel, state || {});
 	setupOsmTooltip(panel);
 	renderHazardStatus(latestHazardStatus || { state: "loading", text: "Connecting to OSM map…" });
