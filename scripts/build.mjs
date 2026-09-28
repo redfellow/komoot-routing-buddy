@@ -6,7 +6,7 @@ import { resolve, join } from "node:path";
 const root = fileURLToPath(new URL("../", import.meta.url));
 export const runtimeFiles = [
 	"browser-api.js", "hazards.js", "background.js", "settings.js", "sidebar.js", "content.js",
-	"map-bridge.js", "planner.css", "popup.html", "popup.css", "popup.js"
+	"hazard-icons.png", "map-bridge.js", "planner.css", "popup.html", "popup.css", "popup.js"
 ];
 
 export async function build(output = join(root, "dist")) {

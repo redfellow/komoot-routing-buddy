@@ -4,7 +4,8 @@
 	"version": "1.2.0",
 	"description": "Make MTB trail difficulty easier to read in the Komoot route planner.",
 	"permissions": [
-		"storage"
+		"storage",
+		"declarativeNetRequestWithHostAccess"
 	],
 	"action": {
 		"default_title": "Komoot Routing Buddy",
@@ -41,6 +42,7 @@
 		{
 			"resources": [
 				"map-bridge.js",
+				"hazard-icons.png",
 				"popup.html"
 			],
 			"matches": [
@@ -58,6 +60,8 @@
 		"128": "icon-rounded.png"
 	},
 	"host_permissions": [
+		"https://overpass.private.coffee/*",
+		"https://maps.mail.ru/osm/tools/overpass/*",
 		"https://overpass-api.de/*"
 	]
 }
