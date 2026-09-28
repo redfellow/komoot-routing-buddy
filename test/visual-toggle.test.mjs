@@ -68,7 +68,7 @@ function fixture() {
 		flush();
 	}
 	interval(); flush();
-	return { layers, original, configure, messages, sources, images, events, map, reply(data) { receive({ source: window, origin: "https://www.komoot.com", data }); flush(); }, writes: () => writes, restyle() { events.styledata(); flush(); } };
+	return { layers, original, configure, messages, sources, images, events, map, reply(data) { receive({ source: window, origin: "https://www.komoot.com", data }); flush(); }, writes: () => writes, restyle() { events.idle(); flush(); } };
 }
 
 function evaluate(expression, properties) {
@@ -252,12 +252,28 @@ test("Squadrats layers arriving late, replaced or externally restyled get fresh 
 	layer.paint["line-opacity"] = 0.8;
 	f.restyle();
 	assert.deepEqual(layer.paint["line-opacity"], ["*", 0.8, 0.5]);
+	layer.paint["line-opacity"] = 0.2;
+	f.restyle();
+	assert.deepEqual(layer.paint["line-opacity"], ["*", 0.2, 0.5]);
 	f.layers.pop(); f.restyle();
 	const replacement = { ...layer, paint: { "line-opacity": 0.4 } };
 	f.layers.push(replacement); f.restyle();
 	assert.deepEqual(replacement.paint["line-opacity"], ["*", 0.4, 0.5]);
 	f.configure({ squadratsOpacity: 100 });
 	assert.equal(replacement.paint["line-opacity"], 0.4);
+});
+
+
+test("Squadrats repaints after the map settles from a source update", function () {
+	const f = fixture();
+	f.configure({ squadratsOpacity: 50 });
+	const layer = { id: "squadrats-grid", source: "squadrats-grid", type: "line", paint: { "line-opacity": 0.2 } };
+	f.layers.push(layer);
+	f.restyle();
+	assert.deepEqual(layer.paint["line-opacity"], ["*", 0.2, 0.5]);
+	layer.paint["line-opacity"] = 0.8;
+	f.restyle();
+	assert.deepEqual(layer.paint["line-opacity"], ["*", 0.8, 0.5]);
 });
 
 
@@ -483,4 +499,81 @@ test("width labels switch contrast with satellite visibility without recreating 
 	f.restyle();
 	assert.equal(label.paint["text-color"], "#000000");
 	assert.equal(label.paint["text-halo-color"], "#ffffff");
+});
+
+
+test("styling gives Squadrats its 100ms route-update window", function () {
+	const scheduling = source.slice(source.indexOf("function scheduleApply()"), source.indexOf("window.addEventListener", source.indexOf("function scheduleApply()")));
+	let now = 0;
+	let routeTimer;
+	let painted = false;
+	const timers = [];
+	const context = {
+		applying: false, needsApply: false, scheduled: undefined, squadratsWait: undefined,
+		setTimeout(fn, delay) { const timer = { fn, at: now + delay }; timers.push(timer); return timer; },
+		apply() { context.scheduled = undefined; mapData(); }
+	};
+	runInNewContext(scheduling, context);
+	function mapData() {
+		if (routeTimer) routeTimer.cancelled = true;
+		routeTimer = context.setTimeout(function () { painted = true; }, 100);
+		context.scheduleApply();
+	}
+	mapData();
+	while (timers.length && now < 300 && !painted) {
+		timers.sort((a, b) => a.at - b.at);
+		const timer = timers.shift();
+		now = timer.at;
+		if (!timer.cancelled) timer.fn();
+	}
+	assert.equal(painted, true, "styling must not continually postpone the route update");
+	assert.equal(now, 100);
+});
+
+
+test("Squadrats source completion gates styling with a bounded fallback", function () {
+	const start = source.indexOf("const squadratsRouteSources =");
+	const code = source.slice(start, source.indexOf("window.addEventListener", start));
+	let now = 0;
+	let applied = 0;
+	const timers = [];
+	const context = {
+		applying: false, needsApply: false, scheduled: undefined,
+		map: { getStyle() { return { layers: [{ id: "squadrats-grid" }] }; }, getSource() { return {}; } },
+		setTimeout(fn, delay) { const t = { fn, time: now + delay }; timers.push(t); return t; },
+		clearTimeout(t) { if (t) t.cancelled = true; },
+		apply() { applied++; }
+	};
+	runInNewContext(code, context);
+	function advance(ms) {
+		const end = now + ms;
+		while (true) {
+			timers.sort((a, b) => a.time - b.time);
+			const t = timers.find((item) => !item.cancelled && item.time <= end);
+			if (!t) break;
+			t.cancelled = true; now = t.time; t.fn();
+		}
+		now = end;
+	}
+	const route = { sourceId: "komoot_tour", sourceDataType: "content" };
+	context.scheduleApply();
+	context.onSquadratsSource(route);
+	context.scheduleApply();
+	advance(600);
+	assert.equal(applied, 0);
+	context.onSquadratsSource({ sourceId: "squadrats-new-squadrats", sourceDataType: "content", isSourceLoaded: true });
+	advance(600);
+	assert.equal(applied, 0);
+	context.onSquadratsSource({ sourceId: "squadrats-new-squadratinhos", sourceDataType: "content", isSourceLoaded: true });
+	advance(500);
+	assert.equal(applied, 1);
+	context.onSquadratsSource(route);
+	advance(2000);
+	context.onSquadratsSource(route);
+	advance(1500);
+	assert.equal(applied, 2, "missing or unchanged sources must not block indefinitely");
+	context.onSquadratsSource(route);
+	context.clearSquadratsWait();
+	advance(4000);
+	assert.equal(applied, 2, "detaching the map cancels the fallback");
 });

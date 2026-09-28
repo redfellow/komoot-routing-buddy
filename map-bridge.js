@@ -6,6 +6,7 @@
 	let config;
 	let scheduled;
 	let applying = false;
+	let needsApply = false;
 	let searchAttempts = 0;
 
 	// Contrast is measured against a controlled black halo, not unpredictable map pixels.
@@ -56,15 +57,15 @@
 	function levelExpression(nativeMtb = false) {
 		const value = [
 			"to-string",
-			["coalesce", 
-				["get", "mtb_scale"], 
-				["get", "sac_scale"], 
-				["get", "trail_difficulty"], 
+			["coalesce",
+				["get", "mtb_scale"],
+				["get", "sac_scale"],
+				["get", "trail_difficulty"],
 				"none"
 			]
 		];
 		const expression = ["match", nativeMtb ? ["to-string", ["get", "mtb_scale"]] : value];
-		//store the values 
+		//store the values
 		for (let level = 0; level <= 5; level++) {
 			expression.push([String(level), `${level}+`, `${level}-`, `S${level}`, `s${level}`, `T${level}`, `t${level}`], level);
 		}
@@ -122,9 +123,16 @@
 			const live = map.getLayer(layer.id);
 			const current = map.getPaintProperty(layer.id, property);
 			let original = squadratsOriginals.get(layer.id);
-			if (!original || original.layer !== live || !same(current, original.applied)) {
+			if (!original || original.layer !== live) {
 				original = { layer: live, value: structuredClone(current), applied: structuredClone(current) };
 				squadratsOriginals.set(layer.id, original);
+			}
+			else if (!same(current, original.applied)) {
+				if (same(current, original.value)) original.applied = structuredClone(current);
+				else {
+					original.value = structuredClone(current);
+					original.applied = structuredClone(current);
+				}
 			}
 			const value = percent === 100 ? original.value : transformStops(original.value, (base) => ["*", base, percent / 100], 1);
 			setPaint(layer.id, property, value);
@@ -363,7 +371,7 @@
 					if (layer.type === "line") {
 						paintBackup["line-width"] = structuredClone(map.getPaintProperty(layer.id, "line-width"));
 					}
-					
+
 					originals.set(layer.id, {
 						layer: liveLayer,
 						filter: structuredClone(map.getFilter(layer.id)),
@@ -435,6 +443,10 @@
 		}
 		finally {
 			applying = false;
+			if (needsApply) {
+				needsApply = false;
+				scheduleApply();
+			}
 		}
 	}
 
@@ -442,9 +454,48 @@
 		window.postMessage({ type: "KRB_MAP_STATUS", detail }, location.origin);
 	}
 
+	const squadratsRouteSources = ["squadrats-new-squadrats", "squadrats-new-squadratinhos"];
+	let squadratsWait;
+	let squadratsFallback;
+	function clearSquadratsWait() {
+		clearTimeout(squadratsFallback);
+		squadratsFallback = undefined;
+		squadratsWait = undefined;
+	}
+	function finishSquadratsWait() {
+		clearSquadratsWait();
+		scheduleApply();
+	}
+	function onSquadratsSource(event) {
+		if (event.sourceId === "komoot_tour" && event.sourceDataType === "content") {
+			const present = (map.getStyle()?.layers || []).some((layer) => layer.id.startsWith("squadrats-"));
+			if (!present) return;
+			clearTimeout(scheduled);
+			scheduled = undefined;
+			// A new route generation invalidates completions from the previous one.
+			const active = squadratsRouteSources.filter((id) => map.getSource(id));
+			squadratsWait = new Set(active.length ? active : squadratsRouteSources);
+			// Do not let repeated route events postpone the fallback indefinitely.
+			if (!squadratsFallback) squadratsFallback = setTimeout(finishSquadratsWait, 3000);
+			return;
+		}
+		if (!squadratsWait?.has(event.sourceId) || event.sourceDataType !== "content") return;
+		if (event.isSourceLoaded !== true) return;
+		squadratsWait.delete(event.sourceId);
+		if (!squadratsWait.size) finishSquadratsWait();
+	}
+
 	function scheduleApply() {
-		if (applying || scheduled) return;
-		scheduled = setTimeout(function () { scheduled = undefined; apply(); }, 50);
+		if (squadratsWait) return;
+		if (applying) {
+			needsApply = true;
+			return;
+		}
+		if (scheduled) return;
+		// Squadrats debounces route data for 100ms. A faster styling pass can
+		// repeatedly reset that timer through MapLibre style/data events.
+		// Retain the verified quiet window after completion, including fallback.
+		scheduled = setTimeout(function () { scheduled = undefined; apply(); }, 500);
 	}
 
 	window.addEventListener("message", function (event) {
@@ -461,6 +512,10 @@
 		if (map && !document.contains(map.getCanvas())) {
 			map.off("styledata", scheduleApply);
 			map.off("idle", scheduleApply);
+			map.off("sourcedata", onSquadratsSource);
+			clearSquadratsWait();
+			clearTimeout(scheduled);
+			scheduled = undefined;
 			map.off("moveend", scheduleHazards);
 			map.off("mousemove", showHazardTooltip);
 			map.off("click", showHazardTooltip);
@@ -480,7 +535,7 @@
 		const found = findMap();
 		if (!found) return;
 		map = found;
-		
+
 		//debug the map properties. use this to find the drawn line properties.
 		/* remove comment to enable debug.
 		map.on("click", function (event) {
@@ -493,6 +548,7 @@
 		*/
 		map.on("styledata", scheduleApply);
 		map.on("idle", scheduleApply);
+		map.on("sourcedata", onSquadratsSource);
 		map.on("moveend", scheduleHazards);
 		map.on("mousemove", showHazardTooltip);
 		map.on("click", showHazardTooltip);
