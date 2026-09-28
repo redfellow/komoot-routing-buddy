@@ -161,29 +161,104 @@
 			canSeparateStrokes(map.getPaintProperty(id, property)));
 	}
 
+	const hazardIconUrl = document.currentScript?.dataset.hazardIcons;
+	const hazardCategories = ["mud", "vegetation", "narrow", "other", "log"];
+	let hazardIconAtlas;
+	let hazardIconsLoading = false;
+	function installHazardIcons() {
+		if (!map.addImage || !hazardIconUrl) return false;
+		if (!hazardIconAtlas) {
+			if (!hazardIconsLoading) {
+				hazardIconsLoading = true;
+				const image = new Image();
+				image.crossOrigin = "anonymous";
+				image.onload = function () { hazardIconAtlas = image; scheduleApply(); };
+				image.onerror = function () { console.warn("KRB hazard icons could not load"); };
+				image.src = hazardIconUrl;
+			}
+			return false;
+		}
+		for (const [index, category] of hazardCategories.entries()) {
+			const id = `krb-hazard-${category}`;
+			if (map.hasImage(id)) continue;
+			const canvas = document.createElement("canvas");
+			canvas.width = canvas.height = 56;
+			const ctx = canvas.getContext("2d");
+			ctx.drawImage(hazardIconAtlas, index * 56, 0, 56, 56, 0, 0, 56, 56);
+			map.addImage(id, ctx.getImageData(0, 0, 56, 56), { pixelRatio: 2 });
+		}
+		return true;
+	}
+
 	let hazardTimer;
 	let hazardRetries = 0;
 	let hazardRequest = 0;
 	let hazardKey;
 	let hazardData;
 	let hazardEnabled = false;
-	const hazardIds = ["krb-conditions-line", "krb-conditions-point", "krb-conditions-label"];
-	function hazardStatus(text) {
-		window.postMessage({ type: "KRB_HAZARD_STATUS", text }, location.origin);
+	const hazardIds = ["krb-conditions-line", "krb-conditions-point", "krb-conditions-label", "krb-conditions-trail-icons", ...hazardCategories.flatMap((key) => [`krb-conditions-icon-point-${key}`, `krb-conditions-icon-line-${key}`])];
+	let latestHazardStatus;
+	function hazardStatus(text, state = "idle", counts) {
+		latestHazardStatus = { type: "KRB_HAZARD_STATUS", text, state, counts };
+		window.postMessage(latestHazardStatus, location.origin);
+	}
+	function hideHazardTooltip() {
+		window.postMessage({ type: "KRB_HAZARD_TOOLTIP", text: "" }, location.origin);
+	}
+	function showHazardTooltip(event) {
+		if (!hazardEnabled) return hideHazardTooltip();
+		const layers = hazardIds.filter((id) => map.getLayer(id));
+		const features = layers.length ? map.queryRenderedFeatures(event.point, { layers }) : [];
+		const feature = features.find((item) => item.layer?.id?.startsWith("krb-conditions-icon-")) || features[0];
+		if (!feature) return hideHazardTooltip();
+		const rect = map.getCanvas().getBoundingClientRect();
+		window.postMessage({ type: "KRB_HAZARD_TOOLTIP", text: feature.layer?.id?.startsWith("krb-conditions-icon-") ? feature.properties[`tip_${feature.layer.id.split("-").at(-1)}`] : feature.properties.label,
+			x: rect.left + event.point.x, y: rect.top + event.point.y }, location.origin);
 	}
 	function removeHazards() {
+		hideHazardTooltip();
 		for (const id of [...hazardIds].reverse()) if (map.getLayer(id)) map.removeLayer(id);
 		if (map.getSource?.("krb-conditions")) map.removeSource("krb-conditions");
 	}
 	function drawHazards() {
 		if (!hazardEnabled || !hazardData || !map.addSource) return;
 		if (!map.getSource("krb-conditions")) map.addSource("krb-conditions", { type: "geojson", data: hazardData, attribution: "© OpenStreetMap contributors" });
+		// Use a font served by the host style. MapLibre's default Open Sans stack
+		// returns 403 on Komoot and can leave every tile of this source blank.
+		const font = (map.getStyle()?.layers || [])
+			.filter((layer) => layer.type === "symbol" && !layer.id.startsWith("krb-conditions"))
+			.map((layer) => layer.layout?.["text-font"])
+			.find((value) => Array.isArray(value) && value.length > 0 && value.every((name) => typeof name === "string") &&
+				!["case", "match", "step", "interpolate", "get", "literal"].includes(value[0]));
+		const style = map.getStyle();
+		const satellite = (style?.layers || []).some((layer) =>
+			layer.type === "raster" && layer.layout?.visibility !== "none" &&
+			layer.paint?.["raster-opacity"] !== 0 &&
+			/satellite|aerial|imagery/i.test(JSON.stringify([layer.id, layer.source, style.sources?.[layer.source]])));
+		const widthPaint = { "text-color": satellite ? "#fff1cf" : "#000000", "text-halo-color": satellite ? "#222222" : "#ffffff", "text-halo-width": 1 };
+		const iconsReady = installHazardIcons();
 		const layers = [
 			{ id: hazardIds[0], type: "line", filter: ["==", ["geometry-type"], "LineString"], paint: { "line-color": "#e89416", "line-width": 2, "line-dasharray": [1, 3] } },
-			{ id: hazardIds[1], type: "circle", filter: ["==", ["geometry-type"], "Point"], paint: { "circle-color": "#e89416", "circle-radius": 5, "circle-stroke-width": 1, "circle-stroke-color": "#222222" } },
-			{ id: hazardIds[2], type: "symbol", filter: ["==", ["geometry-type"], "LineString"], layout: { "symbol-placement": "line", "text-field": ["get", "label"], "text-size": 11, "text-offset": [0, 1.5] }, paint: { "text-color": "#fff1cf", "text-halo-color": "#222222", "text-halo-width": 1 } }
+			{ id: hazardIds[2], type: "symbol", filter: ["all", ["==", ["geometry-type"], "LineString"], ["!=", ["get", "trailRating"], ""], ["!=", ["get", "widthLabel"], ""]], layout: { "text-font": font, "symbol-placement": "line", "text-field": ["get", "widthLabel"], "text-size": 12, "text-offset": [0, 1.5] }, paint: widthPaint }
 		];
-		for (const layer of layers) if (!map.getLayer(layer.id)) map.addLayer({ ...layer, source: "krb-conditions", minzoom: 14 });
+		for (const category of hazardCategories) {
+			for (const [kind, geometry] of [["point", "Point"], ["line", "LineString"]]) {
+				layers.push({ id: `krb-conditions-icon-${kind}-${category}`, type: "symbol",
+					filter: ["all", ["==", ["geometry-type"], geometry], ["==", ["get", `icon_${category}`], true]],
+					layout: { "symbol-placement": kind === "line" ? "line" : "point", "symbol-spacing": 280,
+						"icon-image": `krb-hazard-${category}`, "icon-size": 0.85,
+						"icon-offset": ["match", ["get", `offset_${category}`], ...[-45, -30, -15, 15, 30, 45].flatMap((offset) => [offset, ["literal", [offset, 0]]]), ["literal", [0, 0]]],
+						"icon-rotation-alignment": "viewport", "icon-allow-overlap": true, "icon-ignore-placement": true, "icon-padding": 0 }
+				});
+			}
+		}
+		// Without a usable host font, keep geometry visible and defer labels.
+		for (const layer of layers) if ((layer.id === hazardIds[2] ? Boolean(font) : layer.type !== "symbol" || iconsReady) && !map.getLayer(layer.id)) map.addLayer({ ...layer, source: "krb-conditions", minzoom: 14 });
+		if (map.getLayer(hazardIds[2])) {
+			for (const [property, value] of Object.entries(widthPaint)) {
+				if (map.getPaintProperty(hazardIds[2], property) !== value) map.setPaintProperty(hazardIds[2], property, value);
+			}
+		}
 	}
 	function scheduleHazards() {
 		if (!map?.getBounds) return;
@@ -207,7 +282,7 @@
 		hazardKey = key;
 		hazardData = undefined;
 		removeHazards();
-		hazardStatus("Loading OSM hazards…");
+		hazardStatus("Loading OSM hazards…", "loading");
 		window.postMessage({ type: "KRB_HAZARD_VIEW", bounds, requestId: hazardRequest }, location.origin);
 	}
 	window.addEventListener("message", function (event) {
@@ -216,14 +291,15 @@
 		if (event.data.error) {
 			hazardKey = undefined;
 			const retryMs = event.data.retryMs;
-			if (Number.isFinite(retryMs) && retryMs > 0 && hazardRetries < 3) {
+			const state = [429, 504].includes(event.data.status) ? "throttled" : "error";
+			if (Number.isFinite(retryMs) && retryMs > 0 && !event.data.exhausted && hazardRetries < 3) {
 				hazardRetries++;
 				const delay = Math.max(30000, Math.min(300000, retryMs));
-				hazardStatus(`Hazards: ${event.data.error}. Retrying in ${Math.ceil(delay / 1000)}s (${hazardRetries}/3)`);
+				hazardStatus(`Hazards: ${event.data.error}. Retrying in ${Math.ceil(delay / 1000)}s (${hazardRetries}/3)`, state);
 				clearTimeout(hazardTimer);
 				hazardTimer = setTimeout(updateHazards, delay);
 			}
-			else hazardStatus(`Hazards: ${event.data.error}. Move the map or toggle hazards to retry.`);
+			else hazardStatus(`Hazards: ${event.data.error}. Move the map or toggle hazards to retry.`, state);
 			return;
 		}
 		const data = event.data.data;
@@ -231,7 +307,8 @@
 		hazardRetries = 0;
 		hazardData = data;
 		drawHazards();
-		hazardStatus(data.features.length ? `OSM hazards / width: ${data.features.length} mapped features` : "No mapped hazards / width here; conditions unknown");
+		const counts = data.counts || { total: 0, mud: 0, vegetation: 0, narrow: 0, other: 0 };
+		hazardStatus(`${counts.total} hazards in cached area: ${counts.mud} muddy, ${counts.vegetation} vegetation, ${counts.narrow} narrow (<1 m), ${counts.other} obstacle/warning features. Categories may overlap. ${data.features.length} features including width data.`, "finished", counts);
 	});
 
 	function apply() {
@@ -374,6 +451,7 @@
 		const incoming = event.data.config;
 		if (!incoming || !/^S[0-5]$/.test(incoming.maximumTrailLevel) || !incoming.rules) return;
 		config = incoming;
+		if (latestHazardStatus) window.postMessage(latestHazardStatus, location.origin);
 		searchAttempts = 0;
 		scheduleApply();
 	});
@@ -383,6 +461,11 @@
 			map.off("styledata", scheduleApply);
 			map.off("idle", scheduleApply);
 			map.off("moveend", scheduleHazards);
+			map.off("mousemove", showHazardTooltip);
+			map.off("click", showHazardTooltip);
+			map.off("movestart", hideHazardTooltip);
+			map.getCanvas().removeEventListener?.("mouseleave", hideHazardTooltip);
+			hideHazardTooltip();
 			hazardEnabled = false;
 			hazardRequest++;
 			hazardData = undefined;
@@ -410,11 +493,10 @@
 		map.on("styledata", scheduleApply);
 		map.on("idle", scheduleApply);
 		map.on("moveend", scheduleHazards);
-		map.on("click", function (event) {
-			if (!hazardEnabled || !map.getLayer(hazardIds[0])) return;
-			const feature = map.queryRenderedFeatures(event.point, { layers: hazardIds })[0];
-			if (feature) hazardStatus(`${feature.properties.label} (OSM ${feature.properties.osmId})`);
-		});
+		map.on("mousemove", showHazardTooltip);
+		map.on("click", showHazardTooltip);
+		map.on("movestart", hideHazardTooltip);
+		map.getCanvas().addEventListener?.("mouseleave", hideHazardTooltip);
 		postStatus({ ready: true });
 		scheduleApply();
 	}, 1000);
