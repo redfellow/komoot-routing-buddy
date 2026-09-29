@@ -124,3 +124,6 @@
 .krb-panel__osm-icon svg { display: block; width: 16px; height: 16px; }
 
 #krb-panel.krb-panel--loading { filter: grayscale(1); opacity: 0.5; pointer-events: none; }
+
+.krb-panel__hazard-retry { margin-left: 8px; padding: 3px 8px; border: 1px solid #87988c; border-radius: 6px; background: #fff; color: #17221c; font: inherit; cursor: pointer; }
+.krb-panel__hazard-retry:focus-visible { outline: 2px solid #277a4d; outline-offset: 2px; }

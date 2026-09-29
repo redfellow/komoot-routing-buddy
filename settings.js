@@ -5,28 +5,31 @@ const DEFAULT_RULES = {
   S0: "highlight",
   S1: "highlight",
   S2: "highlight",
-  S3: "avoid",
-  S4: "avoid",
-  S5: "avoid"
+  S3: "highlight",
+  S4: "highlight",
+  S5: "highlight"
 };
 
 const DEFAULT_OPTIONS = {
 	visualsEnabled: true,
+	colourLabels: false,
 	showHazards: true,
+	narrowWarningWidth: 0.4,
 	preloadRouteHazards: false,
-	squadratsOpacity: 100,
+	squadratsOpacity: 50,
+	squadratsBelowRoads: true,
   maximumTrailLevel: "S5",
   rememberLayers: true,
   rememberedLayers: {}
 };
 
 const HIGHLIGHT_COLOURS = {
-  S0: "#26a269",
-  S1: "#1c9cc5",
-  S2: "#6c63ff",
-  S3: "#f6a609",
-  S4: "#e66b2e",
-  S5: "#c01c28"
+  S0: "#26cd69",
+  S1: "#33b8ff",
+  S2: "#ffd400",
+  S3: "#ff493f",
+  S4: "#57575a",
+  S5: "#000000"
 };
 
 async function getColours() {
@@ -45,8 +48,9 @@ async function getRules() {
 async function getOptions() {
   const saved = await globalThis.KrbBrowser.storage.sync.get(["trailOptions", "trailVisualsEnabled", "squadratsOpacity"]);
   const options = { ...DEFAULT_OPTIONS, ...(saved.trailOptions || {}) };
+	options.narrowWarningWidth = Number.isFinite(options.narrowWarningWidth) ? Math.round(Math.max(0.2, Math.min(1, options.narrowWarningWidth)) * 10) / 10 : 0.4;
 	if (typeof saved.trailVisualsEnabled === "boolean") options.visualsEnabled = saved.trailVisualsEnabled;
-	options.squadratsOpacity = Number.isFinite(saved.squadratsOpacity) ? Math.max(0, Math.min(100, saved.squadratsOpacity)) : 100;
+	options.squadratsOpacity = Number.isFinite(saved.squadratsOpacity) ? Math.max(0, Math.min(100, saved.squadratsOpacity)) : DEFAULT_OPTIONS.squadratsOpacity;
   // Version 0.1 stored a { label, selector } object. Keep existing users' choices valid.
   options.rememberedLayers = Object.fromEntries(Object.entries(options.rememberedLayers || {})
     .map(([kind, value]) => [kind, typeof value === "string" ? value : value?.label])

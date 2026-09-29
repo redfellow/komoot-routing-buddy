@@ -143,7 +143,10 @@ async function saveOptions() {
   await globalThis.KrbBrowser.storage.sync.set({
     trailOptions: {
       ...existing,
+      narrowWarningWidth: Number(document.querySelector("#narrowWarningWidth").value),
       maximumTrailLevel: document.querySelector("#maximumLevel").value,
+      squadratsBelowRoads: document.querySelector("#squadratsBelowRoads").checked,
+      colourLabels: document.querySelector("#colourLabels").checked,
       showHazards: document.querySelector("#showHazards").checked,
 		preloadRouteHazards: document.querySelector("#preloadRouteHazards").checked,
       rememberLayers: document.querySelector("#rememberLayers").checked
@@ -158,9 +161,15 @@ document.querySelector("#restore").addEventListener("click", async function () {
   colourSaveTimer = undefined;
   await colourWrites;
   lastSavedColours = undefined;
-  await globalThis.KrbBrowser.storage.sync.set({ trailRules: popupSettings.DEFAULT_RULES, trailColours: popupSettings.HIGHLIGHT_COLOURS, trailOptions: popupSettings.DEFAULT_OPTIONS });
+  await globalThis.KrbBrowser.storage.sync.set({ trailRules: popupSettings.DEFAULT_RULES, trailColours: popupSettings.HIGHLIGHT_COLOURS, trailOptions: popupSettings.DEFAULT_OPTIONS, squadratsOpacity: popupSettings.DEFAULT_OPTIONS.squadratsOpacity });
   render(popupSettings.DEFAULT_RULES, popupSettings.HIGHLIGHT_COLOURS);
+	document.querySelector("#narrowWarningWidth").value = 0.4;
+	document.querySelector("#narrowWarningWidthValue").textContent = "0.4m";
+	document.querySelector("#squadratsOpacity").value = popupSettings.DEFAULT_OPTIONS.squadratsOpacity;
+	document.querySelector("#squadratsOpacityValue").textContent = `${popupSettings.DEFAULT_OPTIONS.squadratsOpacity}%`;
   document.querySelector("#maximumLevel").value = popupSettings.DEFAULT_OPTIONS.maximumTrailLevel;
+  document.querySelector("#squadratsBelowRoads").checked = popupSettings.DEFAULT_OPTIONS.squadratsBelowRoads;
+  document.querySelector("#colourLabels").checked = popupSettings.DEFAULT_OPTIONS.colourLabels;
   document.querySelector("#showHazards").checked = popupSettings.DEFAULT_OPTIONS.showHazards;
 	document.querySelector("#preloadRouteHazards").checked = false;
   document.querySelector("#rememberLayers").checked = popupSettings.DEFAULT_OPTIONS.rememberLayers;
@@ -199,6 +208,12 @@ async function saveSquadrats() {
 }
 
 async function initialise() {
+	if (window.parent !== window) {
+		const main = document.querySelector("main");
+		const reportSize = () => window.parent.postMessage({ type: "KRB_SETTINGS_SIZE", height: main.getBoundingClientRect().height }, "https://www.komoot.com");
+		new ResizeObserver(reportSize).observe(main);
+		reportSize();
+	}
 	document.querySelector("#clearOsmCache").addEventListener("click", async function (event) {
 		const button = event.currentTarget;
 		button.disabled = true;
@@ -233,7 +248,18 @@ async function initialise() {
 	slider.addEventListener("input", previewSquadrats);
 	slider.addEventListener("change", saveSquadrats);
   document.querySelector("#maximumLevel").value = options.maximumTrailLevel;
+  document.querySelector("#squadratsBelowRoads").checked = options.squadratsBelowRoads !== false;
+	document.querySelector("#squadratsBelowRoads").addEventListener("change", saveOptions);
+  document.querySelector("#colourLabels").checked = options.colourLabels === true;
+	document.querySelector("#colourLabels").addEventListener("change", saveOptions);
   document.querySelector("#showHazards").checked = options.showHazards;
+	const narrowSlider = document.querySelector("#narrowWarningWidth");
+	narrowSlider.value = options.narrowWarningWidth;
+	document.querySelector("#narrowWarningWidthValue").textContent = `${options.narrowWarningWidth.toFixed(1)}m`;
+	narrowSlider.addEventListener("input", function () {
+		document.querySelector("#narrowWarningWidthValue").textContent = `${Number(narrowSlider.value).toFixed(1)}m`;
+	});
+	narrowSlider.addEventListener("change", saveOptions);
 	document.querySelector("#preloadRouteHazards").checked = options.preloadRouteHazards === true;
 	document.querySelector("#preloadRouteHazards").addEventListener("change", saveOptions);
   document.querySelector("#showHazards").addEventListener("change", saveOptions);
