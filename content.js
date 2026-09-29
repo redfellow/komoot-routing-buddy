@@ -30,7 +30,7 @@ function installMapBridge() {
 }
 
 function sendMapConfig(rules, options, colours) {
-  window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, colours, showHazards: options.showHazards, preloadRouteHazards: options.preloadRouteHazards === true, squadratsOpacity: options.squadratsOpacity, visualsEnabled: options.visualsEnabled !== false, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
+  window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, colours, colourLabels: options.colourLabels === true, showHazards: options.showHazards, narrowWarningWidth: options.narrowWarningWidth, preloadRouteHazards: options.preloadRouteHazards === true, squadratsOpacity: options.squadratsOpacity, squadratsBelowRoads: options.squadratsBelowRoads !== false, visualsEnabled: options.visualsEnabled !== false, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
 }
 
 window.addEventListener("message", async function (event) {
@@ -119,7 +119,21 @@ function renderHazardStatus(data) {
 			panel.append(status);
 		}
 		status.hidden = data.text === "";
-		status.textContent = ({ loading: "Loading OSM…", throttled: "OSM busy · retry pending", error: "OSM unavailable · move map to retry" })[state] || String(data.text || "").slice(0, 500);
+		status.textContent = ({ loading: "Loading OSM…", throttled: "OSM busy", error: "OSM unavailable" })[state] || String(data.text || "").slice(0, 500);
+		if (state === "error" || state === "throttled") {
+			const retry = document.createElement("button");
+			retry.type = "button";
+			retry.className = "krb-panel__hazard-retry";
+			retry.textContent = "Retry";
+			retry.setAttribute("aria-label", "Retry loading OSM hazards");
+			retry.addEventListener("click", function () {
+				if (retry.disabled) return;
+				retry.disabled = true;
+				renderHazardStatus({ state: "loading", text: "Retrying OSM hazards…" });
+				window.postMessage({ type: "KRB_RELOAD_HAZARDS" }, location.origin);
+			});
+			status.append(retry);
+		}
 		if (state === "finished" && data.counts) {
 			const counts = data.counts;
 			const count = (key) => Number.isInteger(counts[key]) && counts[key] >= 0 ? counts[key] : 0;
@@ -221,17 +235,25 @@ function toggleSettingsDialog(panel, settings) {
 	dialog.addEventListener("keydown", function (event) {
 		if (event.key === "Escape") { event.stopPropagation(); dismiss(); }
 	});
+	let settingsHeight = 150;
 	window.addEventListener("message", function (event) {
-		if (event.source !== frame.contentWindow || event.data?.type !== "KRB_CLOSE_SETTINGS") return;
+		if (event.source !== frame.contentWindow) return;
 		if (event.origin !== new URL(frame.src).origin) return;
-		dismiss();
+		if (event.data?.type === "KRB_SETTINGS_SIZE" && Number.isFinite(event.data.height) && event.data.height > 0) {
+			settingsHeight = Math.ceil(event.data.height);
+			positionDialog();
+		}
+		else if (event.data?.type === "KRB_CLOSE_SETTINGS") dismiss();
 	});
 	function positionDialog() {
 		const rect = panel.getBoundingClientRect();
 		const width = Math.min(360, window.innerWidth - 16);
-		const height = Math.min(510, window.innerHeight - 16);
+		const maxHeight = Math.min(Math.floor(window.innerHeight * 0.7), window.innerHeight - 16);
+		const height = Math.min(settingsHeight + 30, maxHeight);
 		dialog.style.width = `${width}px`;
-		dialog.style.height = `${height}px`;
+		dialog.style.height = "auto";
+		dialog.style.maxHeight = `${maxHeight}px`;
+		frame.style.height = `${Math.max(0, height - 30)}px`;
 		dialog.style.left = `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`;
 		const top = rect.bottom + 6 + height <= window.innerHeight - 8 ? rect.bottom + 6 : rect.top - height - 6;
 		dialog.style.top = `${Math.max(8, Math.min(top, window.innerHeight - height - 8))}px`;

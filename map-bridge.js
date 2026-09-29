@@ -1,7 +1,7 @@
 (function () {
 	const originals = new Map();
 	const squadratsOriginals = new Map();
-	const colours = ["#26a269", "#1c9cc5", "#6c63ff", "#f6a609", "#e66b2e", "#c01c28"];
+	const colours = ["#26cd69", "#33b8ff", "#ffd400", "#ff493f", "#57575a", "#000000"];
 	let map;
 	let config;
 	let scheduled;
@@ -101,6 +101,9 @@
 		if (!same(map.getPaintProperty(id, property), value)) map.setPaintProperty(id, property, value ?? null);
 	}
 
+	function setLayout(id, property, value) {
+		if (!same(map.getLayoutProperty(id, property), value)) map.setLayoutProperty(id, property, value ?? null);
+	}
 	function restore(keep = new Set()) {
 		for (const [id, original] of originals) {
 			if (keep.has(id)) continue;
@@ -108,11 +111,49 @@
 			if (map.getLayer(id) !== original.layer) continue;
 			setFilter(id, original.filter);
 			for (const [property, value] of Object.entries(original.paint)) setPaint(id, property, value);
+			for (const [property, value] of Object.entries(original.layout || {})) setLayout(id, property, value);
+		}
+	}
+
+	const squadratsOrder = new Map();
+	function orderSquadrats() {
+		if (!map.moveLayer) return;
+		const layers = map.getStyle()?.layers || [];
+		const overlays = layers.filter((layer) => layer.id.startsWith("squadrats-") && ["fill", "line"].includes(layer.type));
+		for (const [id, saved] of squadratsOrder) {
+			if (map.getLayer(id) !== saved.layer) squadratsOrder.delete(id);
+		}
+		if (config.squadratsBelowRoads === false) {
+			for (const [id, saved] of [...squadratsOrder].reverse()) {
+				const next = saved.following.find((candidate) => map.getLayer(candidate));
+				map.moveLayer(id, next);
+			}
+			squadratsOrder.clear();
+			return;
+		}
+		if (!overlays.length) return;
+		// Raster basemaps are indivisible: never move the overlay behind imagery.
+		const rasterIndex = layers.reduce((last, layer, index) => layer.type === "raster" && layer.layout?.visibility !== "none" && layer.paint?.["raster-opacity"] !== 0 ? index : last, -1);
+		const anchorIndex = layers.findIndex((layer, index) => index > rasterIndex && layer.type === "line" &&
+			!layer.id.startsWith("squadrats-") && !layer.id.startsWith("krb-") &&
+			/(?:road|street|path|track|trail|footway|cycleway|steps|mtb|highway)/i.test(layer.id));
+		if (anchorIndex < 0) return;
+		const anchor = layers[anchorIndex].id;
+		const expected = overlays.map((layer) => layer.id);
+		const before = layers.slice(Math.max(0, anchorIndex - overlays.length), anchorIndex).map((layer) => layer.id);
+		if (same(before, expected)) return;
+		// Keep Squadrats' internal fill/outline order and avoid redundant style events.
+		for (const layer of overlays) {
+			if (!squadratsOrder.has(layer.id)) squadratsOrder.set(layer.id, {
+				layer: map.getLayer(layer.id), following: layers.slice(layers.findIndex((item) => item.id === layer.id) + 1).map((item) => item.id)
+			});
+			map.moveLayer(layer.id, anchor);
 		}
 	}
 
 	function applySquadrats() {
-		const percent = Number.isFinite(config.squadratsOpacity) ? Math.max(0, Math.min(100, config.squadratsOpacity)) : 100;
+		orderSquadrats();
+		const percent = Number.isFinite(config.squadratsOpacity) ? Math.max(0, Math.min(100, config.squadratsOpacity)) : 50;
 		const sources = new Set(["squadrats-source", "squadrats-new-squadrats", "squadrats-new-squadratinhos", "squadrats-grid", "squadrats-gridinho"]);
 		const layers = (map.getStyle()?.layers || []).filter((layer) =>
 			layer.id.startsWith("squadrats-") && sources.has(layer.source) && ["fill", "line"].includes(layer.type));
@@ -134,7 +175,9 @@
 					original.applied = structuredClone(current);
 				}
 			}
-			const value = percent === 100 ? original.value : transformStops(original.value, (base) => ["*", base, percent / 100], 1);
+			const newSquares = ["squadrats-new-squadrats", "squadrats-new-squadratinhos"].includes(layer.source);
+			const effectivePercent = newSquares ? Math.min(100, percent * 2) : percent;
+			const value = effectivePercent === 100 ? original.value : transformStops(original.value, (base) => ["*", base, effectivePercent / 100], 1);
 			setPaint(layer.id, property, value);
 			original.applied = structuredClone(value);
 		}
@@ -228,26 +271,53 @@
 		for (const id of [...hazardIds].reverse()) if (map.getLayer(id)) map.removeLayer(id);
 		if (map.getSource?.("krb-conditions")) map.removeSource("krb-conditions");
 	}
+	function isSatelliteMap() {
+		const style = map.getStyle();
+		return (style?.layers || []).some((layer) =>
+			layer.type === "raster" && layer.layout?.visibility !== "none" &&
+			layer.paint?.["raster-opacity"] !== 0 &&
+			/satellite|aerial|imagery/i.test(JSON.stringify([layer.id, layer.source, style.sources?.[layer.source]])));
+	}
+	function applyNarrowThreshold(data, threshold) {
+		return { ...data, features: data.features.map(function (feature) {
+			const p = { ...feature.properties };
+			const width = p.widthMetres ?? Number(String(p.widthLabel || "").replace(/^≈/, "").replace(/m$/, ""));
+			p.icon_narrow = width > 0 && width <= threshold;
+			if (p.icon_narrow) p.icon_other = false;
+			const keys = ["mud", "vegetation", "narrow", "log", "other"];
+			const active = keys.filter((key) => p[`icon_${key}`]);
+			for (const key of keys) p[`offset_${key}`] = (active.indexOf(key) - (active.length - 1) / 2) * 30;
+			return { ...feature, properties: p };
+		}) };
+	}
+	let renderedHazardData;
+	let renderedNarrowThreshold;
 	function drawHazards() {
 		if (!hazardEnabled || !hazardData || !map.addSource) return;
-		if (!map.getSource("krb-conditions")) map.addSource("krb-conditions", { type: "geojson", data: hazardData, attribution: "© OpenStreetMap contributors" });
+		const threshold = Number.isFinite(config.narrowWarningWidth) ? Math.round(Math.max(0.2, Math.min(1, config.narrowWarningWidth)) * 10) / 10 : 0.4;
+		const hazardSource = map.getSource("krb-conditions");
+		if (!hazardSource || renderedHazardData !== hazardData || renderedNarrowThreshold !== threshold) {
+			const data = applyNarrowThreshold(hazardData, threshold);
+			if (hazardSource) hazardSource.setData(data);
+			else map.addSource("krb-conditions", { type: "geojson", data, attribution: "© OpenStreetMap contributors" });
+			renderedHazardData = hazardData;
+			renderedNarrowThreshold = threshold;
+		}
 		// Use a font served by the host style. MapLibre's default Open Sans stack
 		// returns 403 on Komoot and can leave every tile of this source blank.
-		const font = (map.getStyle()?.layers || [])
+		const symbols = (map.getStyle()?.layers || []).filter((layer) => layer.type === "symbol" && !layer.id.startsWith("krb-conditions"));
+		const difficultyLabel = symbols.find((layer) => layer.layout?.visibility !== "none" && /mtb_scale/.test(JSON.stringify([layer.filter, layer.layout])) && layer.layout?.["text-font"]);
+		const font = [difficultyLabel, ...symbols].filter(Boolean)
 			.filter((layer) => layer.type === "symbol" && !layer.id.startsWith("krb-conditions"))
 			.map((layer) => layer.layout?.["text-font"])
 			.find((value) => Array.isArray(value) && value.length > 0 && value.every((name) => typeof name === "string") &&
 				!["case", "match", "step", "interpolate", "get", "literal"].includes(value[0]));
-		const style = map.getStyle();
-		const satellite = (style?.layers || []).some((layer) =>
-			layer.type === "raster" && layer.layout?.visibility !== "none" &&
-			layer.paint?.["raster-opacity"] !== 0 &&
-			/satellite|aerial|imagery/i.test(JSON.stringify([layer.id, layer.source, style.sources?.[layer.source]])));
-		const widthPaint = { "text-color": satellite ? "#fff1cf" : "#000000", "text-halo-color": satellite ? "#222222" : "#ffffff", "text-halo-width": 1 };
+		const satellite = isSatelliteMap();
+		const widthPaint = { "text-color": satellite ? "#ffffff" : "#000000", "text-halo-color": satellite ? "#000000" : "#ffffff", "text-halo-width": 1 };
 		const iconsReady = installHazardIcons();
 		const layers = [
 			{ id: hazardIds[0], type: "line", filter: ["==", ["geometry-type"], "LineString"], paint: { "line-color": "#e89416", "line-width": 2, "line-dasharray": [1, 3] } },
-			{ id: hazardIds[2], type: "symbol", filter: ["all", ["==", ["geometry-type"], "LineString"], ["!=", ["get", "trailRating"], ""], ["!=", ["get", "widthLabel"], ""]], layout: { "text-font": font, "symbol-placement": "line", "text-field": ["get", "widthLabel"], "text-size": 12, "text-offset": [0, 1.5] }, paint: widthPaint }
+			{ id: hazardIds[2], type: "symbol", filter: ["all", ["==", ["geometry-type"], "LineString"], ["!=", ["get", "trailRating"], ""], ["!=", ["get", "widthLabel"], ""]], layout: { "text-font": font, "symbol-placement": "line", "text-field": ["get", "widthLabel"], "text-rotation-alignment": "viewport", "text-pitch-alignment": "viewport", "text-size": 12, "text-offset": [0, -1.5], "text-allow-overlap": false, "text-ignore-placement": false, "text-padding": 4 }, paint: widthPaint }
 		];
 		for (const category of hazardCategories) {
 			for (const [kind, geometry] of [["point", "Point"], ["line", "LineString"]]) {
@@ -263,6 +333,7 @@
 		// Without a usable host font, keep geometry visible and defer labels.
 		for (const layer of layers) if ((layer.id === hazardIds[2] ? Boolean(font) : layer.type !== "symbol" || iconsReady) && !map.getLayer(layer.id)) map.addLayer({ ...layer, source: "krb-conditions", minzoom: 14 });
 		if (map.getLayer(hazardIds[2])) {
+			setLayout(hazardIds[2], "text-font", font);
 			for (const [property, value] of Object.entries(widthPaint)) {
 				if (map.getPaintProperty(hazardIds[2], property) !== value) map.setPaintProperty(hazardIds[2], property, value);
 			}
@@ -307,7 +378,7 @@
 				clearTimeout(hazardTimer);
 				hazardTimer = setTimeout(updateHazards, delay);
 			}
-			else hazardStatus(`Hazards: ${event.data.error}. Move the map or toggle hazards to retry.`, state);
+			else hazardStatus(`Hazards: ${event.data.error}. Use Retry to try again.`, state);
 			return;
 		}
 		const data = event.data.data;
@@ -357,6 +428,8 @@
 			// This also drops backups for removed/replaced style layers.
 			restore(new Set(layers.map((layer) => layer.id)));
 			const level = levelExpression(nativeMtb);
+			const neutralLabels = config.colourLabels !== true;
+			const satellite = isSatelliteMap();
 			const max = Number(config.maximumTrailLevel.slice(1));
 			const applied = [];
 
@@ -381,6 +454,12 @@
 					});
 				}
 				const original = originals.get(layer.id);
+				if (layer.type === "symbol") {
+					if (!original.layout) original.layout = Object.fromEntries(["text-allow-overlap", "text-ignore-placement", "text-padding"].map((property) => [property, structuredClone(map.getLayoutProperty(layer.id, property))]));
+					setLayout(layer.id, "text-allow-overlap", false);
+					setLayout(layer.id, "text-ignore-placement", false);
+					setLayout(layer.id, "text-padding", 4);
+				}
 				if (layer.type === "symbol" && !("text-halo-color" in original.paint)) {
 					for (const property of ["text-halo-color", "text-halo-width", "text-halo-blur"]) {
 						original.paint[property] = structuredClone(map.getPaintProperty(layer.id, property));
@@ -395,7 +474,7 @@
 						const custom = config.colours?.[`S${index}`];
 						const colour = /^#[0-9a-f]{6}$/i.test(custom) ? custom : colours[index];
 						const selected = mode === "avoid" ? "#7a1016" : colour;
-						expression.push(index, mode === "off" ? base : layer.type === "symbol" ? labelColour(selected) : selected);
+						expression.push(index, layer.type === "symbol" && neutralLabels ? (satellite ? "#ffffff" : "#000000") : mode === "off" ? base : layer.type === "symbol" ? labelColour(selected) : selected);
 					}
 					expression.push(base);
 					return expression;
@@ -410,13 +489,13 @@
 				setPaint(layer.id, opacityProperty, opacity);
 				if (layer.type === "symbol") {
 					for (const [property, value, fallback] of [
-						["text-halo-color", "#000000", "rgba(0,0,0,0)"],
-						["text-halo-width", 0.5, 0],
+						["text-halo-color", neutralLabels && !satellite ? "#ffffff" : "#000000", "rgba(0,0,0,0)"],
+						["text-halo-width", neutralLabels ? 1 : 0.5, 0],
 						["text-halo-blur", 0, 0]
 					]) {
 						setPaint(layer.id, property, transformStops(original.paint[property], function (base) {
 							const expression = ["match", level];
-							for (let index = 0; index <= 5; index++) expression.push(index, config.rules[`S${index}`] === "off" ? base : value);
+							for (let index = 0; index <= 5; index++) expression.push(index, !neutralLabels && config.rules[`S${index}`] === "off" ? base : value);
 							expression.push(base);
 							return expression;
 						}, fallback));
@@ -594,6 +673,7 @@
 			postStatus({ ready: false });
 			originals.clear();
 			squadratsOriginals.clear();
+			squadratsOrder.clear();
 			searchAttempts = 0;
 		}
 		if (map || ++searchAttempts > 30) return;
