@@ -1,8 +1,6 @@
 # Komoot Routing Buddy
 
-Komoot Routing Buddy helps you read trail difficulty more clearly while planning routes in Komoot.
-
-It adds visual cues directly to the map so difficult sections stand out at a glance without changing the route itself.
+Komoot Routing Buddy makes mountain bike trail difficulty easier to read on Komoot maps using colours. You can choose which difficulty levels to show and their colours. It also displays hazards mapped in OpenStreetMap, such as mud, fallen trees, vegetation, and narrow sections. You can also reduce the opacity of the Squadrats plugin. It does not modify your route.
 
 ## Features
 
