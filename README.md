@@ -7,9 +7,9 @@ It adds visual cues directly to the map so difficult sections stand out at a gla
 ## Features
 
 - Highlights trail difficulty directly on the map
-- Shows hazard overlays for muddy, narrow, and other mapped trail issues
+- OSM integration: Shows hazard overlays for muddy, narrow, and other mapped trail issues
 - Lets you choose which difficulty levels are shown
-- Supports custom colors for each trail difficulty
+- Supports custom colors for each trail difficulty (brighter in Sat view)
 - Adds a clear warning style for the hardest sections
 - Keeps your preferred map and panel settings between sessions
 - Lets you switch back to the original Komoot styling whenever you want
@@ -17,27 +17,27 @@ It adds visual cues directly to the map so difficult sections stand out at a gla
 
 ## Known Issues
 
-- OpenStreetMap Overseer API is often overloaded, which can make trail hazard data take a long time to load, sometimes several minutes.
-- Because of this, the loading status is shown in the floating window so you can see whether hazard data is still being fetched or is delayed.
+- OpenStreetMap Overseer API is often overloaded, which can make trail hazard data take a long time to load, sometimes several minutes. Because of this, the loading status is shown in the floating window so you can see whether hazard data is still being fetched or is delayed. Succesfully loaded OSM data is cached for 7 days.
 
 ## Preview
 
-### Colors & Hazards enabled
+### Default map
 
-![Enabled view](hazards.png)
-- Showing muddy, narrow & custom coloured trails, satellite map
-- Dotted trail line means that the trail contains one ore more hazards
+![Default map view](map-default.png)
 
-### Only trail colors enabled
+### Satellite map with Squadrats opacity @ 15%
 
-![Enabled view](only-trails.png)
-- Showing only S0-S3 trails with custom colors, default map
+![Sat map view](map-satellite.png)
+
+### Default Komoot map without this extension (for comparison)
+
+![No KRB](krb-disabled.png)
 
 ## Install
 
 ### Chrome / Brave
 
-1. Download the latest version from the [Releases page](https://github.com/redfellow/komoot-routing-helper/releases) (or build from source)
+1. Download the latest version from the [Releases page](https://github.com/redfellow/komoot-routing-helper/releases) (or download source)
 2. Open `chrome://extensions` or `brave://extensions`.
 3. Enable Developer mode.
 4. Click Load unpacked and select the generated extension directory.
@@ -45,7 +45,7 @@ It adds visual cues directly to the map so difficult sections stand out at a gla
 
 ### Firefox
 
-1. Download the latest version from the [Releases page](https://github.com/redfellow/komoot-routing-helper/releases) (or build from source
+1. Download the latest version from the [Releases page](https://github.com/redfellow/komoot-routing-helper/releases) (or download source)
 2. Open `about:debugging#/runtime/this-firefox`.
 3. Click Load Temporary Add-on.
 4. Select the generated `manifest.json` for the Firefox build.
@@ -59,7 +59,7 @@ It adds visual cues directly to the map so difficult sections stand out at a gla
 
 ## Privacy and data handling
 
-The extension stores your local preferences in the browser and reads the page state needed to apply the visual styling. It does not upload routes or personal ride data to a remote service. Show hazards is enabled by default: at close zoom levels it sends the viewed map bounding box sequentially to Private.coffee, VK Maps (`maps.mail.ru`), or `overpass-api.de` to retrieve OpenStreetMap obstacles, vegetation, mud, warnings and width data. The provider also receives normal network metadata such as your IP address. Turn off Show hazards in settings to stop these lookups. Missing tags mean unknown conditions; this is not live trail-condition reporting.
+The extension stores your local preferences in the browser and reads the page state needed to apply the visual styling. It does not upload routes or personal ride data to a remote service. Show hazards is enabled by default: at close zoom levels it sends the viewed map bounding box sequentially to Private.coffee, VK Maps, or overpass-api.de to retrieve OpenStreetMap obstacles, vegetation, mud, warnings and width data. The provider also receives normal network metadata such as your IP address. Turn off Show hazards in settings to stop these lookups. Missing tags mean unknown conditions; this is not live trail-condition reporting.
 
 ## For developers and maintainers
 
