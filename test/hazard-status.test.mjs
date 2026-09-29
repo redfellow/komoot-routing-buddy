@@ -8,14 +8,16 @@ const renderer = source.slice(source.indexOf("let latestHazardStatus;"), source.
 
 test("OSM status survives early delivery, shows a notched loading arc and restores concise counts", function () {
 	function element() {
-		return { dataset: {}, children: [], textContent: "", setAttribute() {}, append(child) { this.children.push(child); } };
+		return { dataset: {}, children: [], textContent: "", addEventListener(name, fn) { this[name] = fn; }, setAttribute() {}, append(child) { this.children.push(child); } };
 	}
 	let panel;
 	const icon = element();
 	const count = element();
 	const indicator = element();
 	indicator.querySelector = (selector) => selector.endsWith("osm-icon") ? icon : count;
+	const messages = [];
 	const context = {
+		window: { postMessage(message) { messages.push(message); } }, location: { origin: "https://www.komoot.com" },
 		document: {
 			querySelector(selector) { return selector === "#krb-panel" ? panel : undefined; },
 			createElement: element
@@ -38,6 +40,14 @@ test("OSM status survives early delivery, shows a notched loading arc and restor
 	assert.equal(count.textContent, "12");
 	assert.equal(footer.textContent, "12 hazards · Mud 2 · Vegetation 3 · Narrow 8 · Obstacles 1");
 	assert.equal(indicator.dataset.tooltip, "Detailed cached-area results");
+	context.renderHazardStatus({ state: "error", text: "OSM unavailable" });
+	const retry = footer.children.find((child) => child.className === "krb-panel__hazard-retry");
+	assert.equal(retry.textContent, "Retry");
+	retry.click();
+	assert.equal(indicator.dataset.state, "loading");
+	assert.equal(messages.at(-1).type, "KRB_RELOAD_HAZARDS");
+	retry.click();
+	assert.equal(messages.length, 1);
 	context.renderHazardStatus({ state: "idle", text: "" });
 	assert.equal(indicator.hidden, true);
 	assert.equal(footer.hidden, true);

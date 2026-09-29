@@ -53,7 +53,14 @@ test("settings open beside the floater, clamp to mobile, close and reuse the sam
 	rect = { right: 310, top: 300, bottom: 330 };
 	reposition();
 	assert.equal(dialog.style.width, "304px");
-	assert.equal(dialog.style.height, "384px");
+	assert.equal(dialog.style.height, "auto");
+	assert.equal(dialog.style.maxHeight, "280px");
+	assert.equal(frame.style.height, "150px");
 	assert.equal(dialog.style.left, "8px");
-	assert.equal(dialog.style.top, "8px");
+	assert.equal(dialog.style.top, "114px");
+	events.message({ source: frame.contentWindow, origin: "https://extension.test", data: { type: "KRB_SETTINGS_SIZE", height: 600 } });
+	assert.equal(frame.style.height, "250px");
+	assert.equal(dialog.style.top, "14px");
+	events.message({ source: frame.contentWindow, origin: "https://extension.test", data: { type: "KRB_SETTINGS_SIZE", height: 100 } });
+	assert.equal(frame.style.height, "100px");
 });
