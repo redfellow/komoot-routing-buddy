@@ -23,6 +23,7 @@ function fixture() {
 	const images = new Map();
 	function receive(event) { for (const fn of receivers) fn(event); }
 	let writes = 0;
+	let rejectMissingLineGapWrites = false;
 	const canvas = { getBoundingClientRect() { return { left: 100, top: 50 }; } };
 	const map = {
 		getCanvas() { return canvas; },
@@ -41,9 +42,14 @@ function fixture() {
 		setLayoutProperty(id, key, value) { const layer = this.getLayer(id); layer.layout ||= {}; if (value === null) delete layer.layout[key]; else layer.layout[key] = copy(value); },
 		getFilter(id) { return this.getLayer(id).filter; },
 		setFilter(id, value) { writes++; this.getLayer(id).filter = copy(value); },
-		getPaintProperty(id, key) { return this.getLayer(id).paint[key]; },
+		getPaintProperty(id, key) {
+			const paint = this.getLayer(id).paint;
+			if (["line-gap-width", "line-gap-color"].includes(key) && !(key in paint)) throw new TypeError("Uninitialized paint property");
+			return paint[key];
+		},
 		setPaintProperty(id, key, value) {
 			writes++;
+			if (rejectMissingLineGapWrites && ["line-gap-width", "line-gap-color"].includes(key) && value !== null && !(key in this.getLayer(id).paint)) throw new TypeError("Unsupported paint property");
 			if (value === null) delete this.getLayer(id).paint[key];
 			else this.getLayer(id).paint[key] = copy(value);
 		},
@@ -70,7 +76,13 @@ function fixture() {
 		flush();
 	}
 	interval(); flush();
-	return { layers, original, configure, messages, sources, images, events, map, reply(data) { receive({ source: window, origin: "https://www.komoot.com", data }); flush(); }, writes: () => writes, restyle() { events.idle(); flush(); } };
+	return { layers, original, configure, messages, sources, images, events, map, reply(data) { receive({ source: window, origin: "https://www.komoot.com", data }); flush(); }, writes: () => writes, rejectMissingLineGapWrites() { rejectMissingLineGapWrites = true; }, restyle() { events.idle(); flush(); } };
+}
+
+function luminance(hex) {
+	const channels = [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255);
+	const linear = channels.map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+	return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
 }
 
 function evaluate(expression, properties) {
@@ -104,7 +116,7 @@ test("real mtb_scale values select highlight, warning and dimming without touchi
 	const f = fixture(); f.configure();
 	const paint = f.layers[0].paint;
 	for (const value of [0, "0", "0+", "0-", "S0"]) {
-		assert.equal(evaluate(paint["line-color"], { mtb_scale: value }), "#26cd69");
+		assert.ok(luminance(evaluate(paint["line-color"], { mtb_scale: value })) < luminance("#26cd69"));
 	}
 	assert.equal(evaluate(paint["line-color"], { mtb_scale: "1+" }), "#7a1016");
 	assert.equal(evaluate(paint["line-color"], { mtb_scale: "2" }), "#123456");
@@ -143,7 +155,7 @@ test("replacement style layers get new rules and restore their own original pain
 	const replacement = copy(f.original);
 	replacement.paint["line-color"] = "#abcdef";
 	f.layers[0] = copy(replacement); f.restyle();
-	assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" }), "#26cd69");
+	assert.ok(luminance(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" })) < luminance("#abcdef"));
 	f.configure({ visualsEnabled: false });
 	assert.deepEqual(f.layers[0], replacement);
 });
@@ -167,13 +179,13 @@ test("visuals default to enabled and saved disabled preference survives option l
 test("custom colours update live strokes and labels while avoid keeps its warning colour", function () {
 	const f = fixture();
 	f.configure({ colourLabels: true, colours: { S0: "#abcdef", S1: "#ffffff" } });
-	assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" }), "#abcdef");
+	assert.ok(luminance(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" })) < luminance("#abcdef"));
 	assert.equal(evaluate(f.layers[2].paint["text-color"], { mtb_scale: "0" }), "#abcdef");
 	assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "1" }), "#7a1016");
 	f.configure({ colourLabels: true, colours: { S0: "#123abc" } });
-	assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" }), "#123abc");
+	assert.ok(luminance(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" })) < luminance("#123abc"));
 	f.configure({ colourLabels: true, colours: { S0: "invalid" } });
-	assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" }), "#26cd69");
+	assert.ok(luminance(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" })) < luminance("#26cd69"));
 	f.configure({ visualsEnabled: false });
 	assert.deepEqual(f.layers[0], f.original);
 });
@@ -191,6 +203,34 @@ test("saved colours merge with defaults and invalid values fall back safely", as
 	assert.equal(colours.S5, "#000000");
 });
 
+
+test("default-map lines are dimmed with a darker outline while satellite keeps the vivid palette", function () {
+	const f = fixture();
+	f.configure();
+	const colour = evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" });
+	assert.ok(luminance(colour) < luminance("#26cd69"));
+	f.layers.push({ id: "satellite", type: "raster", layout: { visibility: "visible" }, paint: { "raster-opacity": 1 } });
+	f.configure();
+	assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" }), "#26cd69");
+});
+
+test("rejected line-gap writes do not interrupt trail styling", function () {
+	const f = fixture();
+	f.layers.splice(0);
+	f.layers.push({ id: "path", type: "line", filter: null, paint: { "line-width": 1 } });
+	f.rejectMissingLineGapWrites();
+	f.configure();
+	assert.ok(Array.isArray(f.layers[0].paint["line-color"]));
+	assert.ok(Array.isArray(f.layers[0].paint["line-width"]));
+	assert.equal(f.layers[0].paint["line-gap-color"], undefined);
+	assert.equal(f.layers[0].paint["line-gap-width"], undefined);
+	const status = f.messages.filter((message) => message.type === "KRB_MAP_STATUS").at(-1);
+	assert.equal(status.detail.enabled, true);
+	assert.ok(status.detail.layers.includes("path"));
+	const writes = f.writes();
+	f.restyle();
+	assert.equal(f.writes(), writes);
+});
 
 test("labels contrast with their halo while line colours remain unchanged; Off restores halo", function () {
 	const f = fixture();
@@ -216,7 +256,7 @@ test("labels contrast with their halo while line colours remain unchanged; Off r
 		assert.notEqual(evaluate(paint["text-color"], { mtb_scale: "1" }), "#7a1016");
 		assert.equal(evaluate(paint["text-halo-color"], properties), "#000000");
 		assert.equal(evaluate(paint["text-halo-width"], properties), 0.5);
-		assert.equal(evaluate(f.layers[0].paint["line-color"], properties), colour);
+		assert.ok(luminance(evaluate(f.layers[0].paint["line-color"], properties)) <= luminance(colour) || colour === "#000000");
 		assert.equal(evaluate(paint["text-halo-width"], { mtb_scale: "2" }), 0.5);
 		assert.equal(evaluate(paint["text-halo-width"], { mtb_scale: "unknown" }), 0.5);
 	}
@@ -290,15 +330,15 @@ test("MTB visibility switches renderers and restores base path widths without ac
 	for (let cycle = 0; cycle < 3; cycle++) {
 		for (const layer of f.layers.slice(0, 3)) layer.layout = { visibility: "none" };
 		f.restyle();
-		assert.equal(evaluate(path.paint["line-color"], { mtb_scale: "0" }), "#26cd69");
-		assert.equal(evaluate(path.paint["line-width"], { mtb_scale: "0" }), 4);
+		assert.ok(luminance(evaluate(path.paint["line-color"], { mtb_scale: "0" })) < luminance("#26cd69"));
+		assert.equal(evaluate(path.paint["line-width"], { mtb_scale: "0" }), 3);
 		assert.equal(evaluate(path.paint["line-width"], {}), 1);
 		assert.deepEqual(f.layers[0].paint, f.original.paint);
 		for (const layer of f.layers.slice(0, 3)) layer.layout.visibility = "visible";
 		f.restyle();
 		assert.deepEqual(path, baseline);
 		assert.equal(f.layers[0].paint["line-width"], undefined);
-		assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" }), "#26cd69");
+		assert.ok(luminance(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" })) < luminance("#26cd69"));
 	}
 	f.configure({ visualsEnabled: false });
 	assert.deepEqual(path, baseline);
@@ -316,7 +356,9 @@ test("base paths work without MTB layers and switch when the overlay is added or
 	f.layers.push(...native); f.restyle();
 	assert.deepEqual(path, baseline);
 	f.layers.splice(1); f.restyle();
-	assert.equal(evaluate(path.paint["line-width"], { mtb_scale: "0" }), 4);
+	assert.equal(evaluate(path.paint["line-width"], { mtb_scale: "0" }), 3);
+	assert.equal(path.paint["line-gap-width"], 1);
+	assert.equal(path.paint["line-gap-color"], "#000000");
 	f.configure({ visualsEnabled: false });
 	assert.deepEqual(path, baseline);
 });
@@ -344,10 +386,10 @@ test("fallback preserves double-line widths while widening ordinary trails", fun
 	for (const [index, original] of baseline.entries()) {
 		const layer = f.layers[index];
 		assert.equal(layer.paint["line-width"], 1);
-		assert.equal(evaluate(layer.paint["line-color"], { mtb_scale: "0" }), "#26cd69");
+		assert.ok(luminance(evaluate(layer.paint["line-color"], { mtb_scale: "0" })) < luminance("#26cd69"));
 		for (const key of ["line-gap-width", "line-offset"]) assert.deepEqual(layer.paint[key], original.paint[key]);
 	}
-	assert.equal(evaluate(ordinary.paint["line-width"], { mtb_scale: "0" }), 4);
+	assert.equal(evaluate(ordinary.paint["line-width"], { mtb_scale: "0" }), 3);
 	// A style update introducing a gap must also undo a previous width increase.
 	ordinary.paint["line-gap-width"] = 2;
 	f.restyle();
@@ -377,7 +419,7 @@ test("ordinary trails widen when gap and offset expressions have only zero outpu
 	}
 	f.configure();
 	for (const layer of f.layers) {
-		assert.equal(evaluate(layer.paint["line-width"], { mtb_scale: "0" }), 4, layer.id);
+		assert.equal(evaluate(layer.paint["line-width"], { mtb_scale: "0" }), 3);
 		assert.equal(evaluate(layer.paint["line-width"], {}), 1);
 	}
 });
@@ -391,8 +433,8 @@ test("visible MTB labels do not suppress base trail colouring when MTB lines are
 	const baseline = copy(path);
 	f.layers.push(path);
 	f.configure();
-	assert.equal(evaluate(path.paint["line-color"], { mtb_scale: "0" }), "#26cd69");
-	assert.equal(evaluate(path.paint["line-width"], { mtb_scale: "0" }), 4);
+	assert.ok(luminance(evaluate(path.paint["line-color"], { mtb_scale: "0" })) < luminance("#26cd69"));
+	assert.equal(evaluate(path.paint["line-width"], { mtb_scale: "0" }), 3);
 	assert.match(evaluate(f.layers[2].paint["text-color"], { mtb_scale: "0" }), /^#[0-9a-f]{6}$/);
 	f.layers[0].layout.visibility = "visible";
 	f.restyle();

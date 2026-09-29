@@ -1,5 +1,6 @@
 (function () {
 	const originals = new Map();
+	const rejectedPaintProperties = new WeakMap();
 	const squadratsOriginals = new Map();
 	const colours = ["#26cd69", "#33b8ff", "#ffd400", "#ff493f", "#57575a", "#000000"];
 	let map;
@@ -25,6 +26,58 @@
 		return "#" + adjusted.map((channel) => channel.toString(16).padStart(2, "0")).join("");
 	}
 
+	function hexToRgb(hex) {
+		const channels = [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+		return { r: channels[0], g: channels[1], b: channels[2] };
+	}
+	function rgbToHex({ r, g, b }) {
+		return "#" + [r, g, b].map((channel) => Math.max(0, Math.min(255, Math.round(channel))).toString(16).padStart(2, "0")).join("");
+	}
+	function rgbToHsl({ r, g, b }) {
+		const red = r / 255;
+		const green = g / 255;
+		const blue = b / 255;
+		const max = Math.max(red, green, blue);
+		const min = Math.min(red, green, blue);
+		const delta = max - min;
+		let hue = 0;
+		if (delta !== 0) {
+			if (max === red) hue = ((green - blue) / delta) % 6;
+			else if (max === green) hue = (blue - red) / delta + 2;
+			else hue = (red - green) / delta + 4;
+		}
+		hue = Math.round(hue * 60);
+		if (hue < 0) hue += 360;
+		const lightness = (max + min) / 2;
+		const saturation = delta === 0 ? 0 : delta / (1 - Math.abs(2 * lightness - 1));
+		return { h: hue, s: saturation, l: lightness };
+	}
+	function hslToRgb({ h, s, l }) {
+		const chroma = (1 - Math.abs(2 * l - 1)) * s;
+		const x = chroma * (1 - Math.abs((h / 60) % 2 - 1));
+		const match = l - chroma / 2;
+		let red = 0;
+		let green = 0;
+		let blue = 0;
+		if (h >= 0 && h < 60) [red, green, blue] = [chroma, x, 0];
+		else if (h < 120) [red, green, blue] = [x, chroma, 0];
+		else if (h < 180) [red, green, blue] = [0, chroma, x];
+		else if (h < 240) [red, green, blue] = [0, x, chroma];
+		else if (h < 300) [red, green, blue] = [x, 0, chroma];
+		else [red, green, blue] = [chroma, 0, x];
+		return { r: red * 255 + match * 255, g: green * 255 + match * 255, b: blue * 255 + match * 255 };
+	}
+	function toneTrailColour(hex, satellite) {
+		if (satellite || !/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+		const rgb = hexToRgb(hex);
+		const hsl = rgbToHsl(rgb);
+		const dimmed = {
+			h: hsl.h,
+			s: Math.max(0, Math.min(1, hsl.s * 0.72)),
+			l: Math.max(0, Math.min(1, hsl.l * 0.78))
+		};
+		return rgbToHex(hslToRgb(dimmed));
+	}
 	function isMap(value) {
 		return value && typeof value.getStyle === "function" && typeof value.getCanvas === "function" &&
 			typeof value.setPaintProperty === "function" && document.contains(value.getCanvas());
@@ -97,8 +150,33 @@
 		if (!same(map.getFilter(id), value)) map.setFilter(id, value ?? null);
 	}
 
+	function getPaint(id, property) {
+		try {
+			return map.getPaintProperty(id, property);
+		}
+		catch (error) {
+			const layer = map.getStyle()?.layers?.find((candidate) => candidate.id === id);
+			if (!layer) throw error;
+			return layer.paint?.[property];
+		}
+	}
+
 	function setPaint(id, property, value) {
-		if (!same(map.getPaintProperty(id, property), value)) map.setPaintProperty(id, property, value ?? null);
+		const layer = map.getLayer(id);
+		const rejected = layer && rejectedPaintProperties.get(layer);
+		if (rejected?.has(property)) return false;
+		if (same(getPaint(id, property), value)) return true;
+		try {
+			map.setPaintProperty(id, property, value ?? null);
+			return true;
+		}
+		catch (error) {
+			if (!["line-gap-width", "line-gap-color"].includes(property) || !layer) throw error;
+			const properties = rejected || new Set();
+			properties.add(property);
+			rejectedPaintProperties.set(layer, properties);
+			return false;
+		}
 	}
 
 	function setLayout(id, property, value) {
@@ -209,7 +287,7 @@
 
 	function hasSeparatedStrokes(id) {
 		return ["line-gap-width", "line-offset"].some((property) =>
-			canSeparateStrokes(map.getPaintProperty(id, property)));
+			canSeparateStrokes(getPaint(id, property)));
 	}
 
 	const hazardIconUrl = document.currentScript?.dataset.hazardIcons;
@@ -439,12 +517,13 @@
 				const opacityProperty = layer.type === "line" ? "line-opacity" : "text-opacity";
 				if (!originals.has(layer.id) || originals.get(layer.id).layer !== liveLayer) {
 					const paintBackup = {
-						[colourProperty]: structuredClone(map.getPaintProperty(layer.id, colourProperty)),
-						[opacityProperty]: structuredClone(map.getPaintProperty(layer.id, opacityProperty))
+						[colourProperty]: structuredClone(getPaint(layer.id, colourProperty)),
+						[opacityProperty]: structuredClone(getPaint(layer.id, opacityProperty))
 					};
-					//line width property
 					if (layer.type === "line") {
-						paintBackup["line-width"] = structuredClone(map.getPaintProperty(layer.id, "line-width"));
+						paintBackup["line-width"] = structuredClone(getPaint(layer.id, "line-width"));
+						paintBackup["line-gap-width"] = structuredClone(getPaint(layer.id, "line-gap-width"));
+						paintBackup["line-gap-color"] = structuredClone(getPaint(layer.id, "line-gap-color"));
 					}
 
 					originals.set(layer.id, {
@@ -462,7 +541,7 @@
 				}
 				if (layer.type === "symbol" && !("text-halo-color" in original.paint)) {
 					for (const property of ["text-halo-color", "text-halo-width", "text-halo-blur"]) {
-						original.paint[property] = structuredClone(map.getPaintProperty(layer.id, property));
+						original.paint[property] = structuredClone(getPaint(layer.id, property));
 					}
 				}
 				const allowed = ["any", ["==", level, -1], ["<=", level, max]];
@@ -474,7 +553,8 @@
 						const custom = config.colours?.[`S${index}`];
 						const colour = /^#[0-9a-f]{6}$/i.test(custom) ? custom : colours[index];
 						const selected = mode === "avoid" ? "#7a1016" : colour;
-						expression.push(index, layer.type === "symbol" && neutralLabels ? (satellite ? "#ffffff" : "#000000") : mode === "off" ? base : layer.type === "symbol" ? labelColour(selected) : selected);
+						const trailColour = mode === "off" ? base : layer.type === "symbol" ? labelColour(selected) : mode === "avoid" ? selected : toneTrailColour(selected, satellite);
+						expression.push(index, layer.type === "symbol" && neutralLabels ? (satellite ? "#ffffff" : "#000000") : trailColour);
 					}
 					expression.push(base);
 					return expression;
@@ -505,14 +585,19 @@
 				if (layer.type === "line" && !nativeMtb) {
 					const preserveWidth = hasSeparatedStrokes(layer.id);
 					const targetWidth = config.trailWidth || 4; //enforcing fallback just in case.
+					const effectiveWidth = satellite ? targetWidth : Math.max(1, targetWidth - 1);
 					const width = transformStops(original.paint["line-width"], function (base) {
 						const expression = ["match", level];
-						// line width drawn
-						for (let index = 0; index <= 5; index++) expression.push(index, ["max", base, targetWidth]);
-						expression.push(base); // unrated trails keep their standard width
+						for (let index = 0; index <= 5; index++) expression.push(index, ["max", base, effectiveWidth]);
+						expression.push(base);
 						return expression;
-					}, targetWidth);
+					}, effectiveWidth);
 					setPaint(layer.id, "line-width", preserveWidth ? original.paint["line-width"] : width);
+					if (!preserveWidth) {
+						if (setPaint(layer.id, "line-gap-color", satellite ? "rgba(0,0,0,0)" : "#000000")) {
+							setPaint(layer.id, "line-gap-width", satellite ? 0 : 1);
+						}
+					}
 				}
 				applied.push(layer.id);
 			}
