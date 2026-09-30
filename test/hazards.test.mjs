@@ -278,3 +278,12 @@ test("adjacent preloaded areas satisfy a viewport without a new request", async 
 	assert.equal(result.features.length, data.features.length);
 	assert.equal(result.counts.total, data.counts.total);
 });
+
+test("barrier log uses the wood icon instead of a generic warning", function () {
+	const result = setup().convert([way, { type: "node", id: 2, lat: 61, lon: 23, tags: { barrier: "log" } }]);
+	const p = result.features.find((f) => f.geometry.type === "Point").properties;
+	assert.equal(p.icon_log, true);
+	assert.equal(p.icon_other, false);
+	assert.equal(p.tip_log, "Log / fallen tree");
+});
+

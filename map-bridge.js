@@ -359,6 +359,13 @@
 	function applyNarrowThreshold(data, threshold) {
 		return { ...data, features: data.features.map(function (feature) {
 			const p = { ...feature.properties };
+			// Older cache entries retain the OSM description but predate barrier-log icons.
+			if (/(?:^| · )(?:barrier|obstacle):\s*(?:[^·]*;\s*)?(?:log|fallen_tree|tree_trunk)(?:\s*;| · |$)/.test(p.label || "")) {
+				p.log = true;
+				p.icon_log = true;
+				p.icon_other = false;
+				p.tip_log = "Log / fallen tree";
+			}
 			const width = p.widthMetres ?? Number(String(p.widthLabel || "").replace(/^≈/, "").replace(/m$/, ""));
 			p.icon_narrow = width > 0 && width <= threshold;
 			if (p.icon_narrow) p.icon_other = false;
@@ -370,6 +377,17 @@
 	}
 	let renderedHazardData;
 	let renderedNarrowThreshold;
+	function hazardDotColour() {
+		const expression = ["match", ["get", "trailRating"]];
+		for (let level = 0; level <= 5; level++) {
+			const selected = config.colours?.[`S${level}`];
+			const colour = /^#[0-9a-f]{6}$/i.test(selected) ? selected : colours[level];
+			const darker = "#" + [1, 3, 5].map((offset) => Math.round(parseInt(colour.slice(offset, offset + 2), 16) * 0.6).toString(16).padStart(2, "0")).join("");
+			expression.push([`S${level}`, `S${level}+`, `S${level}-`], darker);
+		}
+		expression.push("#333333");
+		return expression;
+	}
 	function drawHazards() {
 		if (!hazardEnabled || !hazardData || !map.addSource) return;
 		const threshold = Number.isFinite(config.narrowWarningWidth) ? Math.round(Math.max(0.2, Math.min(1, config.narrowWarningWidth)) * 10) / 10 : 0.4;
@@ -394,7 +412,7 @@
 		const widthPaint = { "text-color": satellite ? "#ffffff" : "#000000", "text-halo-color": satellite ? "#000000" : "#ffffff", "text-halo-width": 1 };
 		const iconsReady = installHazardIcons();
 		const layers = [
-			{ id: hazardIds[0], type: "line", filter: ["==", ["geometry-type"], "LineString"], paint: { "line-color": "#e89416", "line-width": 2, "line-dasharray": [1, 3] } },
+			{ id: hazardIds[0], type: "line", filter: ["==", ["geometry-type"], "LineString"], paint: { "line-color": hazardDotColour(), "line-width": 2, "line-dasharray": [1, 5] } },
 			{ id: hazardIds[2], type: "symbol", filter: ["all", ["==", ["geometry-type"], "LineString"], ["!=", ["get", "trailRating"], ""], ["!=", ["get", "widthLabel"], ""]], layout: { "text-font": font, "symbol-placement": "line", "text-field": ["get", "widthLabel"], "text-rotation-alignment": "viewport", "text-pitch-alignment": "viewport", "text-size": 12, "text-offset": [0, -1.5], "text-allow-overlap": false, "text-ignore-placement": false, "text-padding": 4 }, paint: widthPaint }
 		];
 		for (const category of hazardCategories) {
@@ -410,6 +428,7 @@
 		}
 		// Without a usable host font, keep geometry visible and defer labels.
 		for (const layer of layers) if ((layer.id === hazardIds[2] ? Boolean(font) : layer.type !== "symbol" || iconsReady) && !map.getLayer(layer.id)) map.addLayer({ ...layer, source: "krb-conditions", minzoom: 14 });
+		if (map.getLayer(hazardIds[0])) setPaint(hazardIds[0], "line-color", hazardDotColour());
 		if (map.getLayer(hazardIds[2])) {
 			setLayout(hazardIds[2], "text-font", font);
 			for (const [property, value] of Object.entries(widthPaint)) {

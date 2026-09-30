@@ -59,7 +59,7 @@
 			mud: tags.surface?.split(";").includes("mud") || tags.obstacle?.split(";").includes("mud") || false,
 			vegetation: tags.obstacle?.split(";").includes("vegetation") || positive(tags.overgrown),
 			narrow: (metres > 0 && metres < 1) || tags.obstacle?.split(";").includes("narrow") || false,
-			log: tags.obstacle?.split(";").some((value) => ["log", "fallen_tree", "tree_trunk"].includes(value)) || false,
+			log: [tags.obstacle, tags.barrier].some((tag) => tag?.split(";").some((value) => ["log", "fallen_tree", "tree_trunk"].includes(value.trim()))),
 			other: ["obstacle", "barrier", "hazard", "hazard:forward", "hazard:backward"].some((key) => positive(tags[key]))
 		};
 	}

@@ -738,3 +738,19 @@ test("narrow threshold reuses cached measurements without mutating cached icons"
 	}
 	assert.ok(data.features.every((feature) => !feature.properties.icon_narrow));
 });
+
+test("hazard dots track selected colours and cached log barriers regain wood icons", function () {
+	const f = fixture();
+	f.configure({ showHazards: true, colours: { S1: "#80c0ff" } });
+	const request = f.messages.find((message) => message.type === "KRB_HAZARD_VIEW");
+	f.reply({ type: "KRB_HAZARD_DATA", requestId: request.requestId, data: { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "Point", coordinates: [23, 61] }, properties: { label: "barrier: log", icon_other: true } }] } });
+	const p = f.sources.get("krb-conditions").data.features[0].properties;
+	assert.equal(p.icon_log, true);
+	assert.equal(p.icon_other, false);
+	const line = f.layers.find((layer) => layer.id === "krb-conditions-line");
+	assert.deepEqual(line.paint["line-dasharray"], [1, 5]);
+	assert.equal(evaluate(line.paint["line-color"], { trailRating: "S1+" }), "#4d7399");
+	f.configure({ showHazards: true, colours: { S1: "#ffffff" } });
+	assert.equal(evaluate(line.paint["line-color"], { trailRating: "S1" }), "#999999");
+});
+
