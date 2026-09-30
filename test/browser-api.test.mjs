@@ -60,5 +60,6 @@ test("explicit route checks validate sender and work independently of hazard dis
 	assert.equal(listener(message, { id: "krb", tab: {}, url: "https://www.komoot.com/tour/1/edit" }, (value) => { response = value; }), true);
 	await new Promise((resolve) => setImmediate(resolve));
 	assert.equal(calls.length, 1);
+	assert.equal(calls[0].following, message.following);
 	assert.equal(response.data.type, "FeatureCollection");
 });

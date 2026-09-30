@@ -34,7 +34,7 @@
 		"https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 		"https://overpass-api.de/api/interpreter"
 	].map((url) => ({ url, retryAfter: 0, error: undefined }));
-	let active;
+	const active = new Set();
 	let identification;
 	function boundsKey(bounds) {
 		if (!Array.isArray(bounds) || bounds.length !== 4 || !bounds.every(Number.isFinite)) throw new Error("Invalid map bounds");
@@ -173,7 +173,7 @@
 		clearing = (async function () {
 			await readCache();
 			// Let an existing request settle so it cannot repopulate a cleared cache.
-			if (active) await active.promise.catch((error) => console.debug("OSM request ended while clearing:", error.message));
+			await Promise.allSettled([...active].map((request) => request.promise));
 			await cacheStore.clear();
 		})().finally(function () { clearing = undefined; });
 		return clearing;
@@ -211,8 +211,37 @@
 			}
 		}
 	}
-	async function loadRoute(bounds) { return load(bounds, false, true); }
-	async function load(bounds, prefetch = false, forRoute = false) {
+	// A failed combined area is retried as individual cells, not the same large query.
+	const singleRouteAreas = new Set();
+	async function loadRoute(bounds, following = []) {
+		const cached = await load(bounds, false, true, true);
+		if (cached) return { ...cached, coveredAreas: 1 };
+		const key = boundsKey(bounds);
+		let combined = bounds, coveredAreas = 1;
+		if (!singleRouteAreas.has(key) && Array.isArray(following)) {
+			for (const next of following.slice(0, 3)) {
+				boundsKey(next);
+				// Only adjoining cells; cap the enclosing rectangle at 8 km² before padding.
+				if (next[0] > combined[2] || next[2] < combined[0] || next[1] > combined[3] || next[3] < combined[1]) break;
+				const box = [Math.min(combined[0], next[0]), Math.min(combined[1], next[1]), Math.max(combined[2], next[2]), Math.max(combined[3], next[3])];
+				const area = (box[2] - box[0]) * 111 * (box[3] - box[1]) * 111 * Math.cos((box[0] + box[2]) * Math.PI / 360);
+				if (area > 8 || await load(next, false, true, true)) break;
+				combined = box;
+				coveredAreas++;
+			}
+		}
+		try { return { ...await load(combined, false, true), coveredAreas }; }
+		catch (error) {
+			if (coveredAreas > 1 && ![400, 401, 403, 406].includes(error.status)) {
+				singleRouteAreas.add(key);
+				if (singleRouteAreas.size > 128) singleRouteAreas.delete(singleRouteAreas.values().next().value);
+				// A response-size failure can recover with a smaller query on the next retry.
+				if (error.message === "Too much OSM data; zoom in") error.permanent = false;
+			}
+			throw error;
+		}
+	}
+	async function load(bounds, prefetch = false, forRoute = false, cacheOnly = false) {
 		if (clearing) await clearing;
 		boundsKey(bounds);
 		await readCache();
@@ -238,21 +267,32 @@
 		}
 		const combined = await cachedCoverage(bounds, forRoute);
 		if (combined) return combined;
-		if (active) {
-			await active.promise.catch((error) => console.debug("OSM request settled:", error.message));
+		if (cacheOnly) return undefined;
+		if (clearing) { await clearing; return load(bounds, prefetch, forRoute); }
+		const shared = [...active].find((request) => (!forRoute || request.forRoute) && contains(request.bounds, bounds));
+		if (shared) {
+			const data = await shared.promise;
+			return shared.forRoute && !forRoute ? displayData(data) : data;
+		}
+		if (active.size >= 2) {
+			await Promise.race([...active].map((request) => request.promise.catch((error) => console.debug("OSM queued request:", error.message))));
 			return load(bounds, prefetch, forRoute);
 		}
-		const promise = fetchProviders(boundsKey(expandedBounds(bounds)), forRoute);
-		active = { promise };
+		const area = expandedBounds(bounds);
+		const promise = fetchProviders(boundsKey(area), forRoute);
+		const request = { bounds: area, promise, prefetch, forRoute };
+		active.add(request);
 		try { return await promise; }
-		finally { active = undefined; }
+		finally { active.delete(request); }
 	}
 	async function fetchProviders(key, forRoute = false) {
 		await identifyRequests();
 		let lastError;
 		for (const provider of providers) {
+			if (provider.busy) continue;
 			if (Date.now() < provider.retryAfter) { lastError = provider.error; continue; }
-			try { return await fetchData(key, provider.url, forRoute); }
+			provider.busy = fetchData(key, provider.url, forRoute);
+			try { return await provider.busy; }
 			catch (error) {
 				provider.error = error;
 				provider.retryAfter = Date.now() + Math.max(30000, error.retryMs || 0);
@@ -260,6 +300,12 @@
 				// Invalid queries and identification errors need fixing, not replaying.
 				if ([400, 401, 403, 406].includes(error.status) || error.permanent) throw error;
 			}
+			finally { provider.busy = undefined; }
+		}
+		const busy = providers.filter((provider) => provider.busy);
+		if (busy.length) {
+			await Promise.race(busy.map((provider) => provider.busy.catch((error) => console.debug("OSM provider busy:", error.message))));
+			return fetchProviders(key, forRoute);
 		}
 		const retryMs = Math.max(1, Math.min(...providers.map((provider) => provider.retryAfter)) - Date.now());
 		throw Object.assign(new Error(lastError?.message || "OSM providers temporarily unavailable"), { status: lastError?.status, retryMs, exhausted: true });

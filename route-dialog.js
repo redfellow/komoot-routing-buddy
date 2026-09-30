@@ -23,7 +23,7 @@
 		field("bar").setAttribute("aria-valuetext", `${progress.completed} of ${progress.total} areas checked`);
 		field("fill").style.width = `${percent}%`;
 		field("counts").textContent = `${progress.completed}/${progress.total} areas · ${progress.cached} cached · ${progress.downloaded} downloaded`;
-		field("activity").textContent = progress.completed === progress.total ? "Analysing route…" : "Checking cached data and downloading missing areas…";
+		field("activity").textContent = progress.completed === progress.total ? "Analysing route…" : `Checking next areas… ${progress.running || 0} active check${progress.running === 1 ? "" : "s"}`;
 	}
 	function showRetry(value) {
 		clearRetryTimer();
@@ -77,9 +77,9 @@
 			collected = checkpoint.features || [];
 			await globalThis.KrbBrowser.storage.sync.set({ routeCheckPreferences: preferences });
 			controller.signal.throwIfAborted();
-			collected = await checker.collectWithRetry(route, function (bounds) {
-				return globalThis.KrbBrowser.runtime.sendMessage({ type: "KRB_CHECK_AREA", bounds });
-			}, { signal: controller.signal, checkpoint, waiting: function (value) {
+			collected = await checker.collectWithRetry(route, function (bounds, following) {
+				return globalThis.KrbBrowser.runtime.sendMessage({ type: "KRB_CHECK_AREA", bounds, following });
+			}, { signal: controller.signal, checkpoint, concurrency: 2, waiting: function (value) {
 				showRetry(value);
 				position();
 			}, progress: function (progress) {

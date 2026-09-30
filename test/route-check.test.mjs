@@ -262,3 +262,68 @@ test("route matching retains cropped fragments and never bridges missing geometr
 	assert.equal(features.length, 2);
 });
 
+test("batched progress resumes after the last completed batch", async function () {
+	const long = route([point(0), point(10000)]), checkpoint = {};
+	let calls = 0;
+	await assert.rejects(api.collect(long, async function (bounds, following) {
+		calls++;
+		assert.equal(following.length, 3);
+		return calls === 1 ? { data: { type: "FeatureCollection", features: [], coveredAreas: 4, cacheSource: "network" } } : { error: "busy" };
+	}, { checkpoint }), /busy/);
+	assert.equal(checkpoint.completed, 4);
+	assert.equal(checkpoint.downloaded, 4);
+	let first;
+	await api.collect(long, async function (bounds) { first ||= bounds; return { data: { type: "FeatureCollection", features: [], cacheSource: "memory" } }; }, { checkpoint });
+	assert.equal(JSON.stringify(first), JSON.stringify(api.areas(long)[4]));
+	assert.equal(checkpoint.completed, api.areas(long).length);
+});
+
+test("parallel checkpoints keep out-of-order batches when another batch fails", async function () {
+	const long = route([point(0), point(15000)]), checkpoint = {}, pending = [];
+	const work = api.collect(long, function (bounds, following) {
+		return new Promise(function (resolve) { pending.push({ bounds, following, resolve }); });
+	}, { checkpoint, concurrency: 2 });
+	assert.equal(pending.length, 2);
+	assert.equal(pending[0].following.length, 3);
+	assert.equal(pending[1].following.length, 3);
+	pending[0].resolve({ error: "HTTP 504" });
+	await Promise.resolve(); await Promise.resolve();
+	pending[1].resolve({ data: { type: "FeatureCollection", features: [], coveredAreas: 4, cacheSource: "network" } });
+	await assert.rejects(work, /504/);
+	assert.equal(checkpoint.completed, 4);
+	assert.equal(JSON.stringify(checkpoint.completedAreas), "[4,5,6,7]");
+	const requested = [];
+	await api.collect(long, async function (bounds) {
+		requested.push(JSON.stringify(bounds));
+		return { data: { type: "FeatureCollection", features: [], cacheSource: "memory" } };
+	}, { checkpoint, concurrency: 2 });
+	for (const i of [4, 5, 6, 7]) assert.equal(requested.includes(JSON.stringify(api.areas(long)[i])), false);
+	assert.equal(checkpoint.completed, api.areas(long).length);
+});
+
+test("parallel cancellation ignores both late responses and schedules nothing further", async function () {
+	const long = route([point(0), point(15000)]), checkpoint = {}, pending = [], controller = new AbortController();
+	const work = api.collect(long, () => new Promise((resolve) => pending.push(resolve)), { checkpoint, concurrency: 2, signal: controller.signal });
+	assert.equal(pending.length, 2);
+	controller.abort();
+	for (const resolve of pending) resolve({ data: { type: "FeatureCollection", features: [], coveredAreas: 4 } });
+	await assert.rejects(work, /abort/i);
+	assert.equal(checkpoint.completed, 0);
+	assert.equal(pending.length, 2);
+});
+
+test("the faster worker continues while the first batch is still pending", async function () {
+	const long = route([point(0), point(15000)]), checkpoint = {};
+	let first, calls = 0;
+	const work = api.collect(long, function (bounds, following) {
+		if (++calls === 1) return new Promise(function (resolve) { first = resolve; });
+		return Promise.resolve({ data: { type: "FeatureCollection", features: [], coveredAreas: following.length + 1 } });
+	}, { checkpoint, concurrency: 2 });
+	for (let i = 0; i < 30; i++) await Promise.resolve();
+	assert.ok(calls > 2);
+	assert.ok(checkpoint.completed > 4);
+	assert.equal(checkpoint.completedAreas.includes(0), false);
+	first({ data: { type: "FeatureCollection", features: [], coveredAreas: 4 } });
+	await work;
+	assert.equal(checkpoint.completed, api.areas(long).length);
+});

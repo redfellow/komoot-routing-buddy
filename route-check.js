@@ -205,28 +205,50 @@
 		}
 		return { warnings: groupWarnings(warnings, routeSamples), unknown, distance: routeSamples.reduce((sum, s) => sum + s.length, 0) };
 	}
-	async function collect(route, load, { signal, progress = function () {}, checkpoint = {} } = {}) {
+	async function collect(route, load, { signal, progress = function () {}, checkpoint = {}, concurrency = 1 } = {}) {
 		samples(route);
 		const boxes = areas(route), routeSignature = signature(route);
-		if (checkpoint.signature !== routeSignature) Object.assign(checkpoint, { signature: routeSignature, completed: 0, features: [], cached: 0, downloaded: 0 });
+		if (checkpoint.signature !== routeSignature) Object.assign(checkpoint, { signature: routeSignature, completed: 0, completedAreas: [], features: [], cached: 0, downloaded: 0 });
+		const done = new Set(checkpoint.completedAreas || Array.from({ length: checkpoint.completed }, (_, i) => i));
+		const reserved = new Set();
 		const features = new Map(checkpoint.features.map((feature) => [feature.id || feature.properties?.osmId, feature]));
-		for (let i = checkpoint.completed; i < boxes.length; i++) {
-			signal?.throwIfAborted();
-			progress({ completed: i, total: boxes.length, features: [...features.values()], cached: checkpoint.cached || 0, downloaded: checkpoint.downloaded || 0 });
-			const response = await load(boxes[i]);
-			signal?.throwIfAborted();
-			if (response?.error) throw Object.assign(new Error(response.error), { features: [...features.values()], completed: i, total: boxes.length, retryMs: response.retryMs, permanent: response.permanent, status: response.status });
-			if (response?.data?.type !== "FeatureCollection") throw Object.assign(new Error("Route data response is missing"), { permanent: true });
-			for (const feature of response.data.features) {
-				const id = feature.id || feature.properties?.osmId, previous = features.get(id);
-				features.set(id, previous && feature.geometry.type === "Point" ? { ...feature, properties: { ...feature.properties, parentWayIds: [...new Set([...(previous.properties.parentWayIds || []), ...(feature.properties.parentWayIds || [])])] } } : feature);
+		let failure, running = 0;
+		function report() { progress({ completed: done.size, total: boxes.length, features: [...features.values()], cached: checkpoint.cached || 0, downloaded: checkpoint.downloaded || 0, running }); }
+		async function worker() {
+			while (!failure) {
+				signal?.throwIfAborted();
+				const i = boxes.findIndex((box, index) => !done.has(index) && !reserved.has(index));
+				if (i < 0) return;
+				const batch = [];
+				for (let j = i; j < Math.min(i + 4, boxes.length) && !done.has(j) && !reserved.has(j); j++) { reserved.add(j); batch.push(j); }
+				running++; report();
+				try {
+					const response = await load(boxes[i], batch.slice(1).map((index) => boxes[index]));
+					signal?.throwIfAborted();
+					if (response?.error) throw Object.assign(new Error(response.error), { retryMs: response.retryMs, permanent: response.permanent, status: response.status });
+					if (response?.data?.type !== "FeatureCollection") throw Object.assign(new Error("Route data response is missing"), { permanent: true });
+					const covered = response.data.coveredAreas ?? 1;
+					if (!Number.isInteger(covered) || covered < 1 || covered > batch.length) throw Object.assign(new Error("Invalid route area coverage"), { permanent: true });
+					for (const feature of response.data.features) {
+						const id = feature.id || feature.properties?.osmId, previous = features.get(id);
+						features.set(id, previous && feature.geometry.type === "Point" ? { ...feature, properties: { ...feature.properties, parentWayIds: [...new Set([...(previous.properties.parentWayIds || []), ...(feature.properties.parentWayIds || [])])] } } : feature);
+					}
+					for (const index of batch.slice(0, covered)) done.add(index);
+					const counter = ["memory", "disk", "cache"].includes(response.data.cacheSource) ? "cached" : "downloaded";
+					checkpoint[counter] = (checkpoint[counter] || 0) + covered;
+					checkpoint.completed = done.size;
+					checkpoint.completedAreas = [...done];
+					checkpoint.features = [...features.values()];
+				}
+				catch (error) { failure ||= error; }
+				finally { for (const index of batch) reserved.delete(index); running--; if (!signal?.aborted) report(); }
 			}
-			const counter = ["memory", "disk", "cache"].includes(response.data.cacheSource) ? "cached" : "downloaded";
-			checkpoint[counter] = (checkpoint[counter] || 0) + 1;
-			checkpoint.completed = i + 1;
-			checkpoint.features = [...features.values()];
 		}
-		progress({ completed: boxes.length, total: boxes.length, features: [...features.values()], cached: checkpoint.cached || 0, downloaded: checkpoint.downloaded || 0 });
+		const results = await Promise.allSettled(Array.from({ length: concurrency === 2 ? 2 : 1 }, worker));
+		signal?.throwIfAborted();
+		failure ||= results.find((result) => result.status === "rejected")?.reason;
+		if (failure) throw Object.assign(failure, { features: [...features.values()], completed: done.size, total: boxes.length });
+		report();
 		return [...features.values()];
 	}
 	function waitForRetry(milliseconds, signal) {
@@ -237,14 +259,14 @@
 			signal?.addEventListener("abort", abort, { once: true });
 		});
 	}
-	async function collectWithRetry(route, load, { signal, checkpoint = {}, progress = function () {}, waiting = function () {}, now = Date.now, wait = waitForRetry } = {}) {
+	async function collectWithRetry(route, load, { signal, checkpoint = {}, progress = function () {}, waiting = function () {}, now = Date.now, wait = waitForRetry, concurrency = 1 } = {}) {
 		samples(route);
 		areas(route);
 		let stalledSince, completed = checkpoint.completed || 0;
 		while (true) {
 			signal?.throwIfAborted();
 			try {
-				return await collect(route, load, { signal, checkpoint, progress: function (value) {
+				return await collect(route, load, { signal, checkpoint, concurrency, progress: function (value) {
 					if (value.completed > completed) stalledSince = undefined;
 					completed = value.completed;
 					progress(value);

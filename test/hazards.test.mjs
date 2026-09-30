@@ -425,3 +425,123 @@ test("missing projected details are rejected rather than cached as empty coverag
 	assert.throws(() => api.unpack([{ ...way, tags: undefined }]), /incomplete/);
 });
 
+test("route batches combine adjoining misses but preserve individual cache hits", async function () {
+	let calls = 0;
+	const api = setup(async function () { calls++; return new Response(JSON.stringify({ elements: [] })); });
+	const cells = Array.from({ length: 4 }, (_, i) => [61, 23 + i * 0.01, 61.01, 23.011 + i * 0.01]);
+	const result = await api.loadRoute(cells[0], cells.slice(1));
+	assert.equal(result.coveredAreas, 4);
+	assert.equal(calls, 1);
+	for (const cell of cells) assert.notEqual((await api.loadRoute(cell)).cacheSource, "network");
+	assert.equal(calls, 1);
+	// A separately cached next cell must not be included in an uncached request.
+	const other = setup(async function () { calls++; return new Response(JSON.stringify({ elements: [] })); });
+	await other.loadRoute(cells[1]);
+	assert.equal((await other.loadRoute(cells[0], cells.slice(1))).coveredAreas, 1);
+	assert.equal((await other.loadRoute(cells[1], cells.slice(2))).cacheSource, "memory");
+	assert.equal(calls, 3);
+});
+
+test("route batches reject distant cells and cap their enclosing area", async function () {
+	const api = setup(async function () { return new Response(JSON.stringify({ elements: [] })); });
+	assert.equal((await api.loadRoute([61, 23, 61.01, 23.01], [[62, 23, 62.01, 23.01]])).coveredAreas, 1);
+	assert.equal((await api.loadRoute([63, 23, 63.02, 23.04], [[63, 23.039, 63.02, 23.08]])).coveredAreas, 1);
+});
+
+test("failed combined queries retry as single cells after provider cooldown", async function () {
+	let now = 1000000, failing = true;
+	const queries = [];
+	const context = { URL, URLSearchParams, AbortSignal, TextDecoder, Date: { now: () => now, parse: Date.parse },
+		async fetch(url, options) {
+			queries.push(options.body.get("data"));
+			return failing ? new Response("busy", { status: 504 }) : new Response(JSON.stringify({ elements: [] }));
+		}
+	};
+	initialise(context);
+	const first = [61, 23, 61.01, 23.011], following = [[61, 23.01, 61.01, 23.021]];
+	await assert.rejects(context.KrbHazards.loadRoute(first, following), /504/);
+	assert.equal(context.KrbHazards.cacheStats().areas, 0);
+	now += 31000;
+	failing = false;
+	const result = await context.KrbHazards.loadRoute(first, following);
+	assert.equal(result.coveredAreas, 1);
+	assert.notEqual(queries[0], queries.at(-1));
+});
+
+test("long route collection uses fewer network requests and reuses all combined coverage", async function () {
+	let requests = 0;
+	const api = setup(async function () { requests++; return new Response(JSON.stringify({ elements: [] })); });
+	const context = {};
+	runInNewContext(readFileSync(new URL("../route-check.js", import.meta.url), "utf8"), context);
+	const route = { type: "Feature", geometry: { type: "LineString", coordinates: [[23, 61], [24.5, 61]] } };
+	const total = context.KrbRouteCheck.areas(route).length;
+	const checkpoint = {};
+	await context.KrbRouteCheck.collect(route, async function (bounds, following) { return { data: await api.loadRoute(bounds, following) }; }, { checkpoint });
+	assert.ok(total > 70);
+	assert.ok(requests <= Math.ceil(total / 3), `${requests} requests for ${total} cells`);
+	assert.equal(checkpoint.completed, total);
+	const initial = requests;
+	await context.KrbRouteCheck.collect(route, async function (bounds, following) { return { data: await api.loadRoute(bounds, following) }; });
+	assert.equal(requests, initial);
+});
+
+test("global queue allows two distinct providers, deduplicates coverage, and caps all callers", async function () {
+	const pending = [], running = new Set();
+	let peak = 0;
+	const api = setup(function (url) {
+		assert.equal(running.has(url), false);
+		running.add(url); peak = Math.max(peak, running.size);
+		return new Promise(function (resolve) {
+			pending.push({ url, finish() { running.delete(url); resolve(new Response(JSON.stringify({ elements: [] }))); } });
+		});
+	});
+	const first = api.loadRoute([61, 23, 61.01, 23.01]);
+	const duplicate = api.loadRoute([61, 23, 61.01, 23.01]);
+	const second = api.load([62, 23, 62.01, 23.01]);
+	const third = api.loadRoute([63, 23, 63.01, 23.01]);
+	for (let i = 0; i < 20 && pending.length < 2; i++) await new Promise((resolve) => setImmediate(resolve));
+	assert.equal(pending.length, 2);
+	assert.equal(new URL(pending[0].url).hostname, "overpass.private.coffee");
+	assert.equal(new URL(pending[1].url).hostname, "maps.mail.ru");
+	pending[0].finish();
+	for (let i = 0; i < 20 && pending.length < 3; i++) await new Promise((resolve) => setImmediate(resolve));
+	assert.equal(pending.length, 3);
+	assert.equal(pending[2].url, pending[0].url);
+	pending[1].finish(); pending[2].finish();
+	await Promise.all([first, duplicate, second, third]);
+	assert.equal(peak, 2);
+});
+
+test("clearing the cache waits for both concurrent downloads", async function () {
+	const finish = [];
+	const api = setup(() => new Promise((resolve) => finish.push(() => resolve(new Response(JSON.stringify({ elements: [] }))))));
+	const a = api.loadRoute([61, 23, 61.01, 23.01]), b = api.loadRoute([62, 23, 62.01, 23.01]);
+	for (let i = 0; i < 20 && finish.length < 2; i++) await new Promise((resolve) => setImmediate(resolve));
+	assert.equal(finish.length, 2);
+	let cleared = false;
+	const clearing = api.clearCache().then(function () { cleared = true; });
+	finish[0](); await a;
+	assert.equal(cleared, false);
+	finish[1](); await b; await clearing;
+	assert.equal(api.cacheStats().areas, 0);
+});
+
+test("one failed provider falls back without interrupting the other active provider", async function () {
+	const pending = [], running = new Set();
+	const api = setup(function (url) {
+		assert.equal(running.has(url), false);
+		running.add(url);
+		assert.ok(running.size <= 2);
+		return new Promise(function (resolve) {
+			pending.push({ url, finish(status = 200) { running.delete(url); resolve(status === 200 ? new Response(JSON.stringify({ elements: [] })) : new Response("busy", { status, headers: { "Retry-After": "60" } })); } });
+		});
+	});
+	const a = api.loadRoute([61, 23, 61.01, 23.01]), b = api.loadRoute([62, 23, 62.01, 23.01]);
+	for (let i = 0; i < 20 && pending.length < 2; i++) await new Promise((resolve) => setImmediate(resolve));
+	pending[0].finish(429);
+	for (let i = 0; i < 20 && pending.length < 3; i++) await new Promise((resolve) => setImmediate(resolve));
+	assert.equal(new URL(pending[2].url).hostname, "overpass-api.de");
+	assert.equal(running.has(pending[1].url), true);
+	pending[1].finish(); pending[2].finish();
+	await Promise.all([a, b]);
+});
