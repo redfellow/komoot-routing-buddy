@@ -123,7 +123,7 @@
 	function analyse(route, features, options) {
 		options = preferences(options);
 		const routeSamples = samples(route);
-		const unique = new Map(features.map((f) => [f.properties?.osmId || f.id, f]));
+		const unique = new Map(features.map((f) => [f.id || f.properties?.osmId, f]));
 		const ways = [...unique.values()].filter((f) => f.geometry?.type === "LineString");
 		const origin = routeSamples[0].point;
 		const scale = Math.cos(origin[1] * Math.PI / 180) * 111195;
@@ -209,7 +209,7 @@
 		samples(route);
 		const boxes = areas(route), routeSignature = signature(route);
 		if (checkpoint.signature !== routeSignature) Object.assign(checkpoint, { signature: routeSignature, completed: 0, features: [], cached: 0, downloaded: 0 });
-		const features = new Map(checkpoint.features.map((feature) => [feature.properties?.osmId || feature.id, feature]));
+		const features = new Map(checkpoint.features.map((feature) => [feature.id || feature.properties?.osmId, feature]));
 		for (let i = checkpoint.completed; i < boxes.length; i++) {
 			signal?.throwIfAborted();
 			progress({ completed: i, total: boxes.length, features: [...features.values()], cached: checkpoint.cached || 0, downloaded: checkpoint.downloaded || 0 });
@@ -218,7 +218,7 @@
 			if (response?.error) throw Object.assign(new Error(response.error), { features: [...features.values()], completed: i, total: boxes.length, retryMs: response.retryMs, permanent: response.permanent, status: response.status });
 			if (response?.data?.type !== "FeatureCollection") throw Object.assign(new Error("Route data response is missing"), { permanent: true });
 			for (const feature of response.data.features) {
-				const id = feature.properties?.osmId || feature.id, previous = features.get(id);
+				const id = feature.id || feature.properties?.osmId, previous = features.get(id);
 				features.set(id, previous && feature.geometry.type === "Point" ? { ...feature, properties: { ...feature.properties, parentWayIds: [...new Set([...(previous.properties.parentWayIds || []), ...(feature.properties.parentWayIds || [])])] } } : feature);
 			}
 			const counter = ["memory", "disk", "cache"].includes(response.data.cacheSource) ? "cached" : "downloaded";

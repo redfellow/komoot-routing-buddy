@@ -43,3 +43,16 @@ Tests cover 90 areas over 90 MiB surviving a new cache instance, metadata-only s
 Native Brave benchmark (2026-09-29): 90 copies of one actual cached OSM payload, 50,450,220 serialized bytes total, were written to an isolated temporary database in 487ms. After closing/reopening it with the hot memory cache disabled, all 90 areas were read in 378ms with zero payload rewrites. The temporary database was deleted afterwards. A live migrated route-cache hit took 0.6ms. These are cache-path measurements, not full route analysis or extension-message timings; uncached areas still depend on Overpass latency.
 
 
+## Bounded, compact Overpass responses
+
+Queries crop `out skel geom(bbox)` to the expanded cache area and apply the same bbox to obstacle member nodes. Overpass preserves adjacent coordinates at the boundary and uses null placeholders for omitted geometry. Conversion splits at these gaps, retaining separate LineStrings with fragment IDs and a shared `osmId`. Cache unions and route collection retain the fragments; route matching groups candidates by original OSM identity so overlapping fragments do not become competing trails. Counts remain per OSM object.
+
+The response pairs skeletal ways/nodes with `krb_way` / `krb_node` tag records, joined by type and ID. Numeric/base-36 tag keys project only the 15 fields read by conversion: highway, area, MTB scale, width/estimated width, surface, obstacle/overgrown/barrier, hazards (including directional), layer, bridge and tunnel. Names, source attribution tags and other unused element details are not transferred. JSON encoding preserves arbitrary tag text. Node references remain in the wire skeleton for exact obstacle membership, but are discarded from the normalized cache after parent-way relationships are resolved. Missing detail records fail the request and are not cached.
+
+Existing full-geometry cache entries remain valid; no forced cache flush or expiry reset is needed. Unrated paths remain available to route matching and hazard detection. Requests run sequentially.
+
+Live query validation on 2026-09-30 against overpass-api.de, bbox `61,23,61.01,23.02`: both queries returned the same eight ways. The former response was 10,388 bytes / 2,112 gzip bytes; the bounded projected response was 10,181 bytes / 1,738 gzip bytes (about 18% less transferred). This is a small sample, not a general speed claim: projection adds a short tag record per object and can increase small, already-sparse responses. Cropping benefits depend on how far the selected ways extend outside the area. Public-server queuing can still dominate elapsed time.
+
+Protocol references: [cropped geometry](https://dev.overpass-api.de/overpass-doc/en/full_data/bbox.html), [Overpass convert and output](https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_statement_convert).
+
+

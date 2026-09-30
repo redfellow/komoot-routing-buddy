@@ -1,5 +1,27 @@
 // Shared background-side OSM acquisition and normalisation.
 (function () {
+	// Compact wire tags: only fields consumed by conversion / route matching.
+	const wireTags = ["highway", "area", "mtb:scale", "width", "est_width", "surface", "obstacle", "overgrown", "barrier", "hazard", "hazard:forward", "hazard:backward", "layer", "bridge", "tunnel"];
+	function queryFor(key, forRoute) {
+		const rating = forRoute ? "" : `["mtb:scale"~"^[0-5][+-]?$"]`;
+		const tags = wireTags.map((tag, i) => `"${i.toString(36)}"=t["${tag}"]`).join(",");
+		return `[out:json][timeout:20];way["highway"~"^(path|track|footway|bridleway|cycleway)$"]${rating}(${key})->.trails;`
+			+ `.trails out skel geom(${key}) qt;.trails convert krb_way ::id=id(),${tags};out tags;`
+			+ `node(w.trails)(${key})[~"^(obstacle|overgrown|barrier|hazard|hazard:forward|hazard:backward)$"~"."]->.hazards;`
+			+ `.hazards out skel qt;.hazards convert krb_node ::id=id(),${tags};out tags;`;
+	}
+	function unpack(elements) {
+		const tags = new Map();
+		for (const element of elements) {
+			if (!["krb_way", "krb_node"].includes(element.type)) continue;
+			tags.set(`${element.type.slice(4)}/${element.id}`, Object.fromEntries(wireTags.map((tag, i) => [tag, element.tags?.[i.toString(36)]]).filter((pair) => pair[1])));
+		}
+		return elements.filter((element) => ["way", "node"].includes(element.type)).map(function (element) {
+			const properties = tags.get(`${element.type}/${element.id}`) || element.tags;
+			if (!properties) throw new Error("OSM returned incomplete feature details");
+			return { ...element, tags: properties };
+		});
+	}
 	const cacheStore = globalThis.KrbOsmCache.create();
 	let cache;
 	const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -94,7 +116,7 @@
 			if (way.type !== "way" || way.tags?.area === "yes") continue;
 			if (forRoute ? !/^(path|track|footway|bridleway|cycleway)$/.test(way.tags?.highway || "") : !/^[0-5][+-]?$/.test(way.tags?.["mtb:scale"] || "")) continue;
 			const label = describe(way.tags);
-			if (!Array.isArray(way.geometry) || way.geometry.length < 2 || way.geometry.some((p) => !Number.isFinite(p?.lat) || !Number.isFinite(p?.lon))) continue;
+			if (!Array.isArray(way.geometry) || way.geometry.length < 2 || way.geometry.some((p) => p !== null && (!Number.isFinite(p?.lat) || !Number.isFinite(p?.lon)))) continue;
 			for (const id of way.nodes || []) {
 				nodes.add(id);
 				if (/^[0-5][+-]?$/.test(way.tags?.["mtb:scale"] || "")) ratedNodes.add(id);
@@ -102,16 +124,28 @@
 				parentWays.get(id).add(`way/${way.id}`);
 			}
 			if (!forRoute && !label) continue;
-			add(way, { type: "LineString", coordinates: way.geometry.map((p) => [p.lon, p.lat]) }, label);
+			// Nulls are omitted coordinates outside the output bbox, not connecting edges.
+			let coordinates = [], start = 0;
+			for (let i = 0; i <= way.geometry.length; i++) {
+				const point = way.geometry[i];
+				if (point) {
+					if (!coordinates.length) start = i;
+					coordinates.push([point.lon, point.lat]);
+				}
+				else {
+					if (coordinates.length >= 2) add(way, { type: "LineString", coordinates }, label, `${way.nodes?.[start] ?? start}:${way.nodes?.[i - 1] ?? i - 1}`);
+					coordinates = [];
+				}
+			}
 		}
 		for (const node of elements) {
 			if (node.type !== "node" || !nodes.has(node.id) || !Number.isFinite(node.lat) || !Number.isFinite(node.lon)) continue;
 			const label = describe(node.tags || {});
 			if (label) add(node, { type: "Point", coordinates: [node.lon, node.lat] }, label);
 		}
-		function add(element, geometry, label) {
+		function add(element, geometry, label, fragment) {
 			const id = `${element.type}/${element.id}`;
-			const featureId = id;
+			const featureId = fragment ? `${id}/${fragment}` : id;
 			if (seen.has(featureId)) return;
 			seen.add(featureId);
 			features.push({ type: "Feature", id: featureId, properties: { ...(forRoute ? { parentWayIds: geometry.type === "Point" ? [...(parentWays.get(element.id) || [])] : [], ratedParent: geometry.type === "Point" && ratedNodes.has(element.id), layer: element.tags?.layer, bridge: element.tags?.bridge, tunnel: element.tags?.tunnel, widthEstimated: !element.tags?.width && Boolean(element.tags?.est_width) } : {}), label, widthMetres: widthMetres(element.tags || {}), ...iconDetails(element.tags || {}), widthLabel: geometry.type === "LineString" ? widthLabel(element.tags || {}) : "", trailRating: geometry.type === "LineString" && /^[0-5][+-]?$/.test(element.tags?.["mtb:scale"] || "") ? `S${element.tags["mtb:scale"]}` : "", osmId: id, ...categories(element.tags || {}) }, geometry });
@@ -165,7 +199,7 @@
 					if (!payload) return undefined;
 					for (const feature of payload.data.features) {
 						if (!forRoute && hit.routeComplete && !(feature.geometry.type === "LineString" ? feature.properties.trailRating && feature.properties.label : feature.properties.ratedParent)) continue;
-						const id = feature.properties?.osmId || feature.id;
+						const id = feature.id || feature.properties?.osmId;
 						const previous = unique.get(id);
 						if (!previous) unique.set(id, feature);
 						else if (forRoute && feature.geometry.type === "Point") unique.set(id, { ...previous, properties: { ...previous.properties, parentWayIds: [...new Set([...(previous.properties.parentWayIds || []), ...(feature.properties.parentWayIds || [])])] } });
@@ -253,8 +287,7 @@
 		await identification;
 	}
 	async function fetchData(key, endpoint, forRoute = false) {
-		const ratingFilter = forRoute ? "" : `["mtb:scale"~"^[0-5][+-]?$"]`;
-		const query = `[out:json][timeout:20];way["highway"~"^(path|track|footway|bridleway|cycleway)$"]${ratingFilter}(${key})->.trails;.trails out body geom;node(w.trails)[~"^(obstacle|overgrown|barrier|hazard|hazard:forward|hazard:backward)$"~"."];out body;`;
+		const query = queryFor(key, forRoute);
 		try {
 			const response = await fetch(endpoint, {
 				headers: { "Accept": "application/json", "User-Agent": `KomootRoutingBuddy/${globalThis.KrbBrowser?.runtime?.getManifest?.().version || "development"} (+https://github.com/redfellow/komoot-routing-helper)` },
@@ -279,7 +312,7 @@
 			}
 			const json = JSON.parse(text + decoder.decode());
 			if (json.remark || !Array.isArray(json.elements)) throw new Error("OSM returned incomplete data");
-			const data = forRoute ? convertRoute(json.elements) : convert(json.elements);
+			const data = forRoute ? convertRoute(unpack(json.elements)) : convert(unpack(json.elements));
 			const entry = { key, time: Date.now(), accessed: Date.now(), data, routeComplete: forRoute };
 			try { await cacheStore.put(entry); }
 			catch (error) { console.warn("OSM area could not be cached:", error); }
@@ -290,5 +323,5 @@
 			throw error;
 		}
 	}
-	globalThis.KrbHazards = { load, loadRoute, clearCache, cacheStats: cacheStore.stats, convert, convertRoute, boundsKey, expandedBounds, identifyRequests, countFeatures };
+	globalThis.KrbHazards = { queryFor, unpack, load, loadRoute, clearCache, cacheStats: cacheStore.stats, convert, convertRoute, boundsKey, expandedBounds, identifyRequests, countFeatures };
 })();

@@ -251,3 +251,14 @@ test("route progress distinguishes cached areas from downloaded areas", async fu
 	assert.equal(checkpoint.cached, 1);
 });
 
+test("route matching retains cropped fragments and never bridges missing geometry", async function () {
+	const a = { ...way(1, [point(0), point(80)], { trailRating: "S2" }), id: "way/1/10:11" };
+	const b = { ...way(1, [point(120), point(200)], { trailRating: "S2" }), id: "way/1/12:13" };
+	const result = api.analyse(route(), [a, b, a]);
+	assert.ok(result.unknown.unmatched >= 19 && result.unknown.unmatched <= 41);
+	assert.equal(result.warnings.length, 1);
+	assert.ok(result.warnings[0].end > 180);
+	const features = await api.collect(route(), async function () { return { data: { type: "FeatureCollection", features: [a, b] } }; });
+	assert.equal(features.length, 2);
+});
+

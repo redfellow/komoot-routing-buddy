@@ -366,3 +366,62 @@ test("map conversion keeps obstacle nodes on rated ways without way-level hazard
 	assert.equal(result.features[0].properties.icon_log, true);
 });
 
+test("wire query crops geometry and obstacle nodes and projects only required tags", function () {
+	const api = setup(), box = "61,23,61.01,23.01";
+	const query = api.queryFor(box, true);
+	assert.ok(query.includes(`out skel geom(${box}) qt`));
+	assert.ok(query.includes(`node(w.trails)(${box})`));
+	assert.ok(query.includes('"a"=t["hazard:forward"]'));
+	assert.doesNotMatch(query, /out body|t\["name"\]|t\["source"\]/);
+	assert.doesNotMatch(query, /\["mtb:scale"~/);
+	assert.match(api.queryFor(box, false), /\["mtb:scale"~/);
+	const elements = api.unpack([
+		{ ...way, tags: undefined },
+		{ type: "krb_way", id: 1, tags: { "0": "path", "2": "2", "3": "0.3", "a": "slippery", "d": "yes", "c": "1" } },
+		{ type: "node", id: 2, lat: 61, lon: 23 },
+		{ type: "krb_node", id: 2, tags: { "8": "log" } }
+	]);
+	const [trail, node] = api.convertRoute(elements).features;
+	assert.equal(trail.properties.trailRating, "S2");
+	assert.equal(trail.properties.widthMetres, 0.3);
+	assert.equal(trail.properties.bridge, "yes");
+	assert.match(trail.properties.label, /hazard:forward: slippery/);
+	assert.equal(node.properties.parentWayIds.join(), "way/1");
+	assert.equal(node.properties.log, true);
+});
+
+test("cropped ways retain separate fragments without connecting null geometry gaps", function () {
+	const api = setup();
+	const cropped = { ...way, nodes: [10, 11, 12, 13, 14, 15, 16], geometry: [null, { lat: 61, lon: 23 }, { lat: 61, lon: 23.001 }, null, { lat: 61, lon: 23.003 }, { lat: 61, lon: 23.004 }, null] };
+	const data = api.convert([cropped, cropped]);
+	assert.equal(data.features.length, 2);
+	assert.equal(data.features[0].id, "way/1/11:12");
+	assert.equal(data.features[1].id, "way/1/14:15");
+	assert.equal(data.counts.total, 1);
+	assert.ok(data.features.every((f) => f.geometry.coordinates.length === 2));
+});
+
+test("adjacent cache areas preserve different fragments of the same OSM way", async function () {
+	let calls = 0;
+	const api = setup(async function () {
+		calls++;
+		return new Response(JSON.stringify({ elements: [{ ...way, nodes: calls === 1 ? [10, 11] : [11, 12], tags: { highway: "path", "mtb:scale": "2", width: "0.3" }, geometry: calls === 1 ? [{ lat: 61, lon: 23 }, { lat: 61, lon: 23.01 }] : [{ lat: 61, lon: 23.01 }, { lat: 61, lon: 23.02 }] }] }));
+	});
+	await api.loadRoute([61, 23, 61.01, 23.01]);
+	await api.loadRoute([61, 23.01, 61.01, 23.02]);
+	const combined = await api.loadRoute([61, 23.001, 61.01, 23.019]);
+	assert.equal(calls, 2);
+	assert.equal(combined.features.length, 2);
+	assert.equal(combined.counts.total, 1);
+	assert.equal((await api.load([61, 23.001, 61.01, 23.019])).features.length, 2);
+});
+
+test("missing projected details are rejected rather than cached as empty coverage", async function () {
+	const api = setup(async function () {
+		return new Response(JSON.stringify({ elements: [{ ...way, tags: undefined }] }));
+	});
+	await assert.rejects(api.loadRoute([61, 23, 61.01, 23.01]), /incomplete feature details/);
+	assert.equal(api.cacheStats().areas, 0);
+	assert.throws(() => api.unpack([{ ...way, tags: undefined }]), /incomplete/);
+});
+
