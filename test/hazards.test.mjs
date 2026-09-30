@@ -294,3 +294,75 @@ test("barrier log uses the wood icon instead of a generic warning", function () 
 	assert.equal(p.tip_log, "Log / fallen tree");
 });
 
+test("route conversion retains rating-only and unrated trails with obstacle membership", function () {
+	const api = setup();
+	const rated = { ...way, tags: { highway: "path", "mtb:scale": "2+", bridge: "yes", layer: "1" } };
+	const unrated = { ...way, id: 3, tags: { highway: "track", est_width: "30 cm" } };
+	const obstacle = { type: "node", id: 2, lat: 61, lon: 23, tags: { barrier: "log" } };
+	const result = api.convertRoute([rated, rated, unrated, obstacle, { ...obstacle, id: 99 }]);
+	assert.equal(result.features.length, 3);
+	const [a, b, node] = result.features;
+	assert.equal(a.properties.trailRating, "S2+");
+	assert.equal(a.properties.label, "");
+	assert.equal(a.properties.bridge, "yes");
+	assert.equal(a.properties.layer, "1");
+	assert.equal("nodeIds" in a.properties, false); // Membership is retained on obstacles, not every way.
+	assert.equal(b.properties.trailRating, "");
+	assert.equal(b.properties.widthMetres, 0.3);
+	assert.equal(b.properties.widthEstimated, true);
+	assert.equal(node.properties.parentWayIds.join(","), "way/1,way/3");
+	assert.equal(node.properties.log, true);
+	assert.equal(api.convert([rated]).features.length, 0);
+});
+
+test("route conversion excludes unsupported ways and orphan obstacles", function () {
+	const api = setup();
+	const invalid = { ...way, tags: { highway: "path" }, geometry: [null, {}] };
+	const area = { ...way, tags: { highway: "path", area: "yes" } };
+	const road = { ...way, tags: { highway: "motorway" } };
+	const node = { type: "node", id: 2, lat: 61, lon: 23, tags: { barrier: "log" } };
+	assert.equal(api.convertRoute([invalid, area, road, node]).features.length, 0);
+});
+
+test("route queries upgrade old cache coverage and complete data also serves the map", async function () {
+	let calls = 0;
+	const api = setup(async function (url, options) {
+		calls++;
+		if (calls === 2) assert.doesNotMatch(options.body.get("data"), /\["mtb:scale"~/);
+		return new Response(JSON.stringify({ elements: [{ ...way, tags: { highway: "path", "mtb:scale": "3" } }, { ...way, id: 5, tags: { highway: "track", width: "0.3" } }] }));
+	});
+	const bounds = [61, 23, 61.01, 23.01];
+	assert.equal((await api.load(bounds)).features.length, 0);
+	assert.equal((await api.loadRoute(bounds)).features.length, 2);
+	await api.loadRoute(bounds);
+	assert.equal(calls, 2);
+	assert.equal((await api.load(bounds)).features.length, 0);
+	assert.equal(calls, 2);
+});
+
+test("route areas persist across restart without the former 128-area cap", async function () {
+	const indexedDB = new IDBFactory();
+	let calls = 0;
+	const bounds = (i) => [60, 20 + i * 0.03, 60.001, 20.001 + i * 0.03];
+	function restart() {
+		const context = { indexedDB, URL, URLSearchParams, AbortSignal, TextDecoder,
+			async fetch() { calls++; return new Response(JSON.stringify({ elements: [] })); } };
+		initialise(context);
+		return context.KrbHazards;
+	}
+	let api = restart();
+	for (let i = 0; i < 130; i++) await api.loadRoute(bounds(i));
+	api = restart();
+	for (let i = 0; i < 130; i++) await api.loadRoute(bounds(i));
+	assert.equal(calls, 130);
+	assert.equal(api.cacheStats().areas, 130);
+	assert.equal(api.cacheStats().payloadWrites, 0);
+});
+
+test("map conversion keeps obstacle nodes on rated ways without way-level hazards", function () {
+	const result = setup().convert([{ ...way, tags: { "mtb:scale": "1" } }, { type: "node", id: 2, lat: 61, lon: 23, tags: { barrier: "log" } }]);
+	assert.equal(result.features.length, 1);
+	assert.equal(result.features[0].properties.osmId, "node/2");
+	assert.equal(result.features[0].properties.icon_log, true);
+});
+

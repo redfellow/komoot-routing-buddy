@@ -754,3 +754,27 @@ test("hazard dots track selected colours and cached log barriers regain wood ico
 	assert.equal(evaluate(line.paint["line-color"], { trailRating: "S1" }), "#999999");
 });
 
+test("route snapshots ignore selection changes and invalidate results after geometry changes", function () {
+	const f = fixture();
+	const route = { type: "FeatureCollection", features: [{ type: "Feature", properties: { segment_type: "Routed", selected: false }, geometry: { type: "LineString", coordinates: [[23, 61], [23.001, 61.001]] } }] };
+	f.sources.set("komoot_tour", { _data: route });
+	f.reply({ type: "KRB_ROUTE_SNAPSHOT", requestId: 7 });
+	const snapshot = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT_DATA");
+	assert.equal(snapshot.requestId, 7);
+	assert.ok(snapshot.routeKey);
+	assert.equal(snapshot.route.features[0].geometry.coordinates.length, 2);
+	route.features[0].properties.selected = true;
+	f.events.sourcedata({ sourceId: "komoot_tour", sourceDataType: "content" });
+	assert.equal(f.messages.filter((m) => m.type === "KRB_ROUTE_CHANGED").length, 0);
+	let focused;
+	f.map.easeTo = function (value) { focused = value; };
+	f.reply({ type: "KRB_ROUTE_FOCUS", routeKey: snapshot.routeKey, point: [23, 61], coordinates: [[23, 61], [23.001, 61.001]] });
+	assert.equal(focused.center[0], 23);
+	assert.equal(focused.zoom, 16);
+	route.features[0].geometry.coordinates[1][0] += 0.001;
+	f.events.sourcedata({ sourceId: "komoot_tour", sourceDataType: "content" });
+	assert.equal(f.messages.filter((m) => m.type === "KRB_ROUTE_CHANGED").length, 1);
+	focused = undefined;
+	f.reply({ type: "KRB_ROUTE_FOCUS", routeKey: snapshot.routeKey, point: [23, 61], coordinates: [[23, 61], [23.001, 61.001]] });
+	assert.equal(focused, undefined);
+});

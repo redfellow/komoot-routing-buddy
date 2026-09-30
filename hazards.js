@@ -3,6 +3,10 @@
 	const cacheStore = globalThis.KrbOsmCache.create();
 	let cache;
 	const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+	function displayData(data) {
+		const features = data.features.filter((f) => f.geometry.type === "LineString" ? f.properties.trailRating && f.properties.label : f.properties.ratedParent);
+		return { type: "FeatureCollection", features, counts: countFeatures(features) };
+	}
 	const providers = [
 		"https://overpass.private.coffee/api/interpreter",
 		"https://maps.mail.ru/osm/tools/overpass/api/interpreter",
@@ -32,7 +36,6 @@
 	async function readCache() {
 		cache = await cacheStore.list();
 	}
-
 	function widthMetres(tags) {
 		const match = String(tags.width || tags.est_width || "").trim().match(/^(\d+(?:\.\d+)?)\s*(m|cm|ft)?$/);
 		return match ? Number(match[1]) * (match[2] === "cm" ? 0.01 : match[2] === "ft" ? 0.3048 : 1) : undefined;
@@ -78,15 +81,27 @@
 		else if (tags.est_width) notes.push(`Estimated width: ${tags.est_width}`);
 		return notes.join(" · ").slice(0, 400);
 	}
-	function convert(elements) {
+	function convertRoute(elements) {
+		return convert(elements, true);
+	}
+	function convert(elements, forRoute = false) {
 		const features = [];
 		const nodes = new Set();
+		const parentWays = new Map();
+		const ratedNodes = new Set();
 		const seen = new Set();
 		for (const way of elements) {
-			if (way.type !== "way" || !/^[0-5][+-]?$/.test(way.tags?.["mtb:scale"] || "") || way.tags?.area === "yes") continue;
-			for (const id of way.nodes || []) nodes.add(id);
+			if (way.type !== "way" || way.tags?.area === "yes") continue;
+			if (forRoute ? !/^(path|track|footway|bridleway|cycleway)$/.test(way.tags?.highway || "") : !/^[0-5][+-]?$/.test(way.tags?.["mtb:scale"] || "")) continue;
 			const label = describe(way.tags);
-			if (!label || !Array.isArray(way.geometry) || way.geometry.length < 2 || way.geometry.some((p) => !Number.isFinite(p?.lat) || !Number.isFinite(p?.lon))) continue;
+			if (!Array.isArray(way.geometry) || way.geometry.length < 2 || way.geometry.some((p) => !Number.isFinite(p?.lat) || !Number.isFinite(p?.lon))) continue;
+			for (const id of way.nodes || []) {
+				nodes.add(id);
+				if (/^[0-5][+-]?$/.test(way.tags?.["mtb:scale"] || "")) ratedNodes.add(id);
+				if (!parentWays.has(id)) parentWays.set(id, new Set());
+				parentWays.get(id).add(`way/${way.id}`);
+			}
+			if (!forRoute && !label) continue;
 			add(way, { type: "LineString", coordinates: way.geometry.map((p) => [p.lon, p.lat]) }, label);
 		}
 		for (const node of elements) {
@@ -96,9 +111,10 @@
 		}
 		function add(element, geometry, label) {
 			const id = `${element.type}/${element.id}`;
-			if (seen.has(id)) return;
-			seen.add(id);
-			features.push({ type: "Feature", id, properties: { label, widthMetres: widthMetres(element.tags || {}), ...iconDetails(element.tags || {}), widthLabel: geometry.type === "LineString" ? widthLabel(element.tags || {}) : "", trailRating: geometry.type === "LineString" ? `S${element.tags["mtb:scale"]}` : "", osmId: id, ...categories(element.tags || {}) }, geometry });
+			const featureId = id;
+			if (seen.has(featureId)) return;
+			seen.add(featureId);
+			features.push({ type: "Feature", id: featureId, properties: { ...(forRoute ? { parentWayIds: geometry.type === "Point" ? [...(parentWays.get(element.id) || [])] : [], ratedParent: geometry.type === "Point" && ratedNodes.has(element.id), layer: element.tags?.layer, bridge: element.tags?.bridge, tunnel: element.tags?.tunnel, widthEstimated: !element.tags?.width && Boolean(element.tags?.est_width) } : {}), label, widthMetres: widthMetres(element.tags || {}), ...iconDetails(element.tags || {}), widthLabel: geometry.type === "LineString" ? widthLabel(element.tags || {}) : "", trailRating: geometry.type === "LineString" && /^[0-5][+-]?$/.test(element.tags?.["mtb:scale"] || "") ? `S${element.tags["mtb:scale"]}` : "", osmId: id, ...categories(element.tags || {}) }, geometry });
 		}
 		return { type: "FeatureCollection", features, counts: countFeatures(features) };
 	}
@@ -128,11 +144,11 @@
 		})().finally(function () { clearing = undefined; });
 		return clearing;
 	}
-	async function cachedCoverage(bounds) {
+	async function cachedCoverage(bounds, forRoute = false) {
 		let uncovered = [bounds];
 		const selected = [];
 		for (const entry of [...cache.values()].reverse()) {
-			if (Date.now() - entry.time >= CACHE_TTL) continue;
+			if (Date.now() - entry.time >= CACHE_TTL || forRoute && !entry.routeComplete) continue;
 			const box = entry.bounds;
 			let used = false;
 			uncovered = uncovered.flatMap(function (b) {
@@ -147,22 +163,32 @@
 				for (const hit of selected) {
 					const payload = await cacheStore.read(hit.id);
 					if (!payload) return undefined;
-					for (const feature of payload.data.features) unique.set(feature.properties?.osmId || feature.id, feature);
+					for (const feature of payload.data.features) {
+						if (!forRoute && hit.routeComplete && !(feature.geometry.type === "LineString" ? feature.properties.trailRating && feature.properties.label : feature.properties.ratedParent)) continue;
+						const id = feature.properties?.osmId || feature.id;
+						const previous = unique.get(id);
+						if (!previous) unique.set(id, feature);
+						else if (forRoute && feature.geometry.type === "Point") unique.set(id, { ...previous, properties: { ...previous.properties, parentWayIds: [...new Set([...(previous.properties.parentWayIds || []), ...(feature.properties.parentWayIds || [])])] } });
+					}
 				}
 				const features = [...unique.values()];
-				return { type: "FeatureCollection", features, counts: countFeatures(features) };
+				const data = { type: "FeatureCollection", features, counts: countFeatures(features) };
+				return forRoute ? { ...data, cacheSource: "cache" } : data;
 			}
 		}
 	}
-	async function load(bounds, prefetch = false) {
+	async function loadRoute(bounds) { return load(bounds, false, true); }
+	async function load(bounds, prefetch = false, forRoute = false) {
 		if (clearing) await clearing;
 		boundsKey(bounds);
 		await readCache();
 		for (const hit of [...cache.values()].reverse()) {
-			if (Date.now() - hit.time < CACHE_TTL && contains(hit.bounds, bounds)) {
+			if ((!forRoute || hit.routeComplete) && Date.now() - hit.time < CACHE_TTL && contains(hit.bounds, bounds)) {
 				const payload = await cacheStore.read(hit.id);
 				if (!payload) continue;
 				const data = payload.data;
+				if (forRoute) return { ...data, cacheSource: payload.source };
+				if (hit.routeComplete) return displayData(data);
 				// Upgrade cached icon placement without discarding successful geometry.
 				for (const feature of data.features) {
 					const p = feature.properties;
@@ -176,28 +202,23 @@
 				return data;
 			}
 		}
-		const combined = await cachedCoverage(bounds);
+		const combined = await cachedCoverage(bounds, forRoute);
 		if (combined) return combined;
 		if (active) {
-			if (!prefetch && active.prefetch) {
-				await active.promise.catch((error) => console.debug("OSM preload ended before viewport request:", error.message));
-				return load(bounds);
-			}
-			if (contains(active.bounds, bounds)) return active.promise;
-			throw Object.assign(new Error("Another OSM area is loading"), { retryMs: 30000 });
+			await active.promise.catch((error) => console.debug("OSM request settled:", error.message));
+			return load(bounds, prefetch, forRoute);
 		}
-		const area = expandedBounds(bounds);
-		const promise = fetchProviders(boundsKey(area));
-		active = { bounds: area, promise, prefetch };
+		const promise = fetchProviders(boundsKey(expandedBounds(bounds)), forRoute);
+		active = { promise };
 		try { return await promise; }
 		finally { active = undefined; }
 	}
-	async function fetchProviders(key) {
+	async function fetchProviders(key, forRoute = false) {
 		await identifyRequests();
 		let lastError;
 		for (const provider of providers) {
 			if (Date.now() < provider.retryAfter) { lastError = provider.error; continue; }
-			try { return await fetchData(key, provider.url); }
+			try { return await fetchData(key, provider.url, forRoute); }
 			catch (error) {
 				provider.error = error;
 				provider.retryAfter = Date.now() + Math.max(30000, error.retryMs || 0);
@@ -231,8 +252,9 @@
 		}
 		await identification;
 	}
-	async function fetchData(key, endpoint) {
-		const query = `[out:json][timeout:20];way["highway"~"^(path|track|footway|bridleway|cycleway)$"]["mtb:scale"~"^[0-5][+-]?$"](${key})->.trails;.trails out body geom;node(w.trails)[~"^(obstacle|overgrown|barrier|hazard|hazard:forward|hazard:backward)$"~"."];out body;`;
+	async function fetchData(key, endpoint, forRoute = false) {
+		const ratingFilter = forRoute ? "" : `["mtb:scale"~"^[0-5][+-]?$"]`;
+		const query = `[out:json][timeout:20];way["highway"~"^(path|track|footway|bridleway|cycleway)$"]${ratingFilter}(${key})->.trails;.trails out body geom;node(w.trails)[~"^(obstacle|overgrown|barrier|hazard|hazard:forward|hazard:backward)$"~"."];out body;`;
 		try {
 			const response = await fetch(endpoint, {
 				headers: { "Accept": "application/json", "User-Agent": `KomootRoutingBuddy/${globalThis.KrbBrowser?.runtime?.getManifest?.().version || "development"} (+https://github.com/redfellow/komoot-routing-helper)` },
@@ -257,15 +279,16 @@
 			}
 			const json = JSON.parse(text + decoder.decode());
 			if (json.remark || !Array.isArray(json.elements)) throw new Error("OSM returned incomplete data");
-			const data = convert(json.elements);
-			try { await cacheStore.put({ key, time: Date.now(), data }); }
+			const data = forRoute ? convertRoute(json.elements) : convert(json.elements);
+			const entry = { key, time: Date.now(), accessed: Date.now(), data, routeComplete: forRoute };
+			try { await cacheStore.put(entry); }
 			catch (error) { console.warn("OSM area could not be cached:", error); }
-			return data;
+			return forRoute ? { ...data, cacheSource: "network" } : data;
 		}
 		catch (error) {
 			if (error.name === "TimeoutError") error.message = "OSM request timed out";
 			throw error;
 		}
 	}
-	globalThis.KrbHazards = { load, clearCache, cacheStats: cacheStore.stats, convert, boundsKey, expandedBounds, identifyRequests, countFeatures };
+	globalThis.KrbHazards = { load, loadRoute, clearCache, cacheStats: cacheStore.stats, convert, convertRoute, boundsKey, expandedBounds, identifyRequests, countFeatures };
 })();

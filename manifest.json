@@ -31,6 +31,8 @@
 				"browser-api.js",
 				"settings.js",
 				"sidebar.js",
+				"route-check.js",
+				"route-dialog.js",
 				"content.js"
 			],
 			"css": [

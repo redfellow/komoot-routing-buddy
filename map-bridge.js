@@ -693,8 +693,62 @@
 			window.postMessage({ type: "KRB_PRELOAD_ROUTE", areas: routeAreas(route, [(b.getWest() + b.getEast()) / 2, (b.getSouth() + b.getNorth()) / 2]) }, location.origin);
 		}, 2000);
 	}
+	let checkedRouteKey;
+	let routeHighlightTimer;
+	function routeSnapshot() {
+		const data = map?.getSource("komoot_tour")?._data;
+		if (!data || typeof data !== "object") throw new Error("Komoot route is not ready");
+		const features = (data.type === "FeatureCollection" ? data.features : data.type === "Feature" ? [data] : [])
+			.filter((f) => ["LineString", "MultiLineString"].includes(f.geometry?.type))
+			.map((f) => ({ type: "Feature", geometry: f.geometry, properties: Object.fromEntries(["segment_type", "layer", "bridge", "tunnel"].filter((key) => ["string", "number"].includes(typeof f.properties?.[key])).map((key) => [key, f.properties[key]])) }));
+		if (!features.length) throw new Error("Draw or open a route first");
+		const route = { type: "FeatureCollection", features };
+		return { route, routeKey: JSON.stringify(route) };
+	}
+	function clearRouteHighlight() {
+		clearTimeout(routeHighlightTimer);
+		if (map?.getLayer("krb-route-check-highlight")) map.removeLayer("krb-route-check-highlight");
+		if (map?.getSource("krb-route-check-highlight")) map.removeSource("krb-route-check-highlight");
+	}
+	function checkRouteChanged() {
+		if (!checkedRouteKey) return;
+		let current;
+		try { current = routeSnapshot().routeKey; }
+		catch (error) { console.debug("Route unavailable:", error.message); }
+		if (current !== checkedRouteKey) {
+			checkedRouteKey = undefined;
+			clearRouteHighlight();
+			window.postMessage({ type: "KRB_ROUTE_CHANGED" }, location.origin);
+		}
+	}
+	window.addEventListener("message", function (event) {
+		if (event.source !== window || event.origin !== location.origin) return;
+		if (event.data?.type === "KRB_ROUTE_SNAPSHOT") {
+			try {
+				const snapshot = routeSnapshot();
+				checkedRouteKey = snapshot.routeKey;
+				window.postMessage({ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: event.data.requestId, ...snapshot }, location.origin);
+			}
+			catch (error) { window.postMessage({ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: event.data.requestId, error: error.message }, location.origin); }
+		}
+		if (event.data?.type === "KRB_ROUTE_FOCUS" && map) {
+			checkRouteChanged();
+			if (!checkedRouteKey || event.data.routeKey !== checkedRouteKey) return;
+			const { point, coordinates } = event.data;
+			const valid = (p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 85;
+			if (!valid(point) || !Array.isArray(coordinates) || coordinates.length < 2 || coordinates.length > 100000 || !coordinates.every(valid)) return;
+			clearRouteHighlight();
+			try {
+				map.addSource("krb-route-check-highlight", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates } } });
+				map.addLayer({ id: "krb-route-check-highlight", source: "krb-route-check-highlight", type: "line", paint: { "line-color": "#ff00bb", "line-width": 8, "line-opacity": 0.8 } });
+				map.easeTo({ center: point, zoom: Math.max(map.getZoom(), 16), duration: 600 });
+				routeHighlightTimer = setTimeout(clearRouteHighlight, 8000);
+			}
+			catch (error) { console.warn("Could not focus route warning:", error); }
+		}
+	});
 	function onRoutePreloadSource(event) {
-		if (event.sourceId === "komoot_tour" && event.sourceDataType === "content") scheduleRoutePreload();
+		if (event.sourceId === "komoot_tour" && event.sourceDataType === "content") { checkRouteChanged(); scheduleRoutePreload(); }
 	}
 
 	const squadratsRouteSources = ["squadrats-new-squadrats", "squadrats-new-squadratinhos"];
@@ -753,6 +807,9 @@
 
 	setInterval(function () {
 		if (map && !document.contains(map.getCanvas())) {
+			if (checkedRouteKey) window.postMessage({ type: "KRB_ROUTE_CHANGED" }, location.origin);
+			checkedRouteKey = undefined;
+			clearRouteHighlight();
 			map.off("styledata", scheduleApply);
 			map.off("idle", scheduleApply);
 			map.off("sourcedata", onSquadratsSource);

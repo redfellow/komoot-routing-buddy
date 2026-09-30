@@ -9,6 +9,7 @@ let routePreloadGeneration = 0;
 let viewportRequests = 0;
 let routePreloadWork = Promise.resolve();
 let mapReady = false;
+let routeCheckActive = false;
 function updatePanelReadiness() {
 	const panel = document.querySelector("#krb-panel");
 	if (!panel) return;
@@ -35,11 +36,16 @@ function sendMapConfig(rules, options, colours) {
 
 window.addEventListener("message", async function (event) {
 	if (event.source !== window || event.origin !== location.origin) return;
+	if (event.data?.type === "KRB_ROUTE_CHECK_ACTIVE") {
+		routeCheckActive = event.data.active === true;
+		if (routeCheckActive) routePreloadGeneration++;
+	}
 	if (event.data?.type === "KRB_MAP_STATUS") {
 		mapReady = event.data.detail?.ready === true && !event.data.detail?.error;
 		updatePanelReadiness();
 	}
 	if (event.data?.type === "KRB_PRELOAD_ROUTE") {
+		if (routeCheckActive) return;
 		const generation = ++routePreloadGeneration;
 		const areas = Array.isArray(event.data.areas) ? event.data.areas.slice(0, 8) : [];
 		routePreloadWork = routePreloadWork.catch((error) => console.debug("OSM preload queue reset:", error.message)).then(async function () {
@@ -170,6 +176,7 @@ function createPanel(state) {
   document.documentElement.append(panel);
 	updatePanelReadiness();
 	setupPanelControls(panel, state || {});
+	globalThis.KrbRouteDialog?.attach(panel);
 	setupOsmTooltip(panel);
 	renderHazardStatus(latestHazardStatus || { state: "loading", text: "Connecting to OSM map…" });
 }

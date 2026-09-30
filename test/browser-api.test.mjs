@@ -49,3 +49,16 @@ test("adapter loads before API consumers in each extension entry point", functio
 	assert.deepEqual(loaded, ["browser-api.js", "osm-cache.js", "hazards.js", "background.js"]);
 });
 
+test("explicit route checks validate sender and work independently of hazard display", async function () {
+	const listeners = [], calls = [];
+	const context = { KrbBrowser: { runtime: { id: "krb", onMessage: { addListener(fn) { listeners.push(fn); } } } }, KrbHazards: { async loadRoute(bounds, following) { calls.push({ bounds, following }); return { type: "FeatureCollection", features: [] }; } } };
+	runInNewContext(read("background.js"), context);
+	const listener = listeners.at(-1), message = { type: "KRB_CHECK_AREA", bounds: [61, 23, 61.001, 23.001], following: [[61, 23.001, 61.001, 23.002]] };
+	assert.equal(listener(message, { id: "other", tab: {}, url: "https://www.komoot.com/plan" }, () => {}), undefined);
+	assert.equal(listener(message, { id: "krb", tab: {}, url: "https://example.com/plan" }, () => {}), undefined);
+	let response;
+	assert.equal(listener(message, { id: "krb", tab: {}, url: "https://www.komoot.com/tour/1/edit" }, (value) => { response = value; }), true);
+	await new Promise((resolve) => setImmediate(resolve));
+	assert.equal(calls.length, 1);
+	assert.equal(response.data.type, "FeatureCollection");
+});

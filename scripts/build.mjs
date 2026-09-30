@@ -5,7 +5,7 @@ import { resolve, join } from "node:path";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 export const runtimeFiles = [
-	"browser-api.js", "osm-cache.js", "hazards.js", "background.js", "settings.js", "sidebar.js", "content.js",
+	"browser-api.js", "osm-cache.js", "hazards.js", "background.js", "settings.js", "sidebar.js", "route-check.js", "route-dialog.js", "content.js",
 	"hazard-icons.png", "map-bridge.js", "planner.css", "popup.html", "popup.css", "popup.js"
 ];
 

@@ -127,3 +127,30 @@
 
 .krb-panel__hazard-retry { margin-left: 8px; padding: 3px 8px; border: 1px solid #87988c; border-radius: 6px; background: #fff; color: #17221c; font: inherit; cursor: pointer; }
 .krb-panel__hazard-retry:focus-visible { outline: 2px solid #277a4d; outline-offset: 2px; }
+
+.krb-route { position: fixed; z-index: 2147483647; box-sizing: border-box; max-height: 70vh; overflow: auto; padding: 22px 18px 16px; border: 1px solid #bbc6be; border-radius: 18px; background: #fff; color: #17221c; box-shadow: 0 5px 24px #0004; font: 14px/1.45 system-ui, sans-serif; }
+.krb-route[hidden], .krb-route [hidden] { display: none; }
+.krb-route h2 { margin: 0 0 14px; font: 700 20px/1.3 system-ui, sans-serif; }
+.krb-route fieldset { margin: 0; padding: 0; border: 0; }
+.krb-route label { display: block; margin: 12px 0; font-weight: 600; }
+.krb-route select, .krb-route input[type="range"] { display: block; box-sizing: border-box; width: 100%; margin-top: 6px; accent-color: #267944; }
+.krb-route select { padding: 7px; color: #17221c; background: #fff; border: 1px solid #bbc6be; border-radius: 8px; font: inherit; }
+.krb-route input[type="checkbox"] { accent-color: #267944; }
+.krb-route .krb-route__checkbox { display: flex; gap: 8px; align-items: center; }
+.krb-route__help { font-size: 12px; color: #56645c; }
+.krb-route__actions { display: flex; gap: 8px; }
+.krb-route__actions button, .krb-route__results button { border: 0; border-radius: 8px; padding: 9px 12px; background: #e9efeb; color: #17221c; font: inherit; cursor: pointer; }
+.krb-route__actions button:disabled { opacity: .5; cursor: wait; }
+.krb-route__results { list-style: none; padding: 0; margin: 12px 0 0; }
+.krb-route__results li { margin: 6px 0; }
+.krb-route__results button { width: 100%; text-align: left; }
+.krb-route button:focus-visible, .krb-route input:focus-visible, .krb-route select:focus-visible { outline: 2px solid #1c9cc5; outline-offset: 2px; }
+.krb-panel__route svg { display: block; }
+
+.krb-route__bar { position: relative; height: 7px; overflow: hidden; border-radius: 999px; background: #e9efeb; }
+.krb-route__fill { display: block; width: 0; height: 100%; border-radius: inherit; background: #267944; transition: width .2s ease; }
+.krb-route__bar::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 25%, #fff7 50%, transparent 75%); transform: translateX(-100%); animation: krb-route-shimmer 1.8s linear infinite; }
+.krb-route__progress[hidden] .krb-route__bar::after { animation: none; }
+.krb-route__progress p { margin: 7px 0; }
+@keyframes krb-route-shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .krb-route__bar::after { animation: none; display: none; } .krb-route__fill { transition: none; } }
