@@ -12,6 +12,7 @@
 		"node": ">=22"
 	},
 	"devDependencies": {
+		"fake-indexeddb": "^6.2.5",
 		"sharp": "0.35.4",
 		"web-ext": "10.6.0"
 	},

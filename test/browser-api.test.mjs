@@ -46,5 +46,6 @@ test("adapter loads before API consumers in each extension entry point", functio
 	assert.ok(popup.indexOf('src="browser-api.js"') < popup.indexOf('src="settings.js"'));
 	const loaded = [];
 	runInNewContext(read(manifest.background.service_worker), { importScripts(...files) { loaded.push(...files); } });
-	assert.deepEqual(loaded, ["browser-api.js", "hazards.js", "background.js"]);
+	assert.deepEqual(loaded, ["browser-api.js", "osm-cache.js", "hazards.js", "background.js"]);
 });
+

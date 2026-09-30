@@ -2,10 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
-const source = readFileSync(new URL("../hazards.js", import.meta.url), "utf8");
+import { IDBFactory } from "fake-indexeddb";
+const source = readFileSync(new URL("../osm-cache.js", import.meta.url), "utf8") + readFileSync(new URL("../hazards.js", import.meta.url), "utf8");
+function initialise(context) {
+	context.indexedDB ||= new IDBFactory();
+	context.TextEncoder = TextEncoder;
+	runInNewContext(source, context);
+}
 function setup(fetch) {
 	const context = { fetch, URL, URLSearchParams, AbortSignal, TextDecoder };
-	runInNewContext(source, context);
+	initialise(context);
 	return context.KrbHazards;
 }
 const way = { type: "way", id: 1, nodes: [2], tags: { "mtb:scale": "1", obstacle: "vegetation", width: "0.8" }, geometry: [{ lat: 61, lon: 23 }, { lat: 61.001, lon: 23.001 }] };
@@ -69,7 +75,7 @@ test("identification rule is installed once and scoped to this extension and end
 		runtime: { getManifest() { return { version: "1.2.0" }; }, getURL() { return "chrome-extension://test-extension/"; } },
 		declarativeNetRequest: { async updateDynamicRules(rule) { calls.push(rule); } }
 	} };
-	runInNewContext(source, context);
+	initialise(context);
 	await Promise.all([context.KrbHazards.identifyRequests(), context.KrbHazards.identifyRequests()]);
 	assert.equal(calls.length, 1);
 	const rule = calls[0].addRules[0];
@@ -81,17 +87,18 @@ test("identification rule is installed once and scoped to this extension and end
 
 test("persistent cache survives background restarts and expires after 7 days", async function () {
 	let stored = {};
+	const indexedDB = new IDBFactory();
 	let now = 1000000;
 	let calls = 0;
 	function restart() {
-		const context = { console, URL, URLSearchParams, AbortSignal, TextDecoder, Date: { now: () => now },
+		const context = { indexedDB, console, URL, URLSearchParams, AbortSignal, TextDecoder, Date: { now: () => now },
 			KrbBrowser: { storage: { local: {
 				async get() { return structuredClone(stored); },
 				async set(value) { stored = structuredClone(value); }
 			} } },
 			async fetch() { calls++; return new Response(JSON.stringify({ elements: [way] })); }
 		};
-		runInNewContext(source, context);
+		initialise(context);
 		return context.KrbHazards;
 	}
 	const bounds = [61, 23, 61.01, 23.01];
@@ -111,7 +118,7 @@ test("failed requests are not persisted and retain HTTP throttle status", async 
 		KrbBrowser: { storage: { local: { async get() { return {}; }, async set(value) { writes.push(value); } } } },
 		async fetch() { return new Response("unavailable", { status: 429 }); }
 	};
-	runInNewContext(source, context);
+	initialise(context);
 	for (let i = 0; i < 2; i++) {
 		await assert.rejects(context.KrbHazards.load([61, 23, 61.01, 23.01]), (error) => error.status === 429 && error.retryMs > 0);
 	}
@@ -161,7 +168,7 @@ test("providers are sequential, have independent cooldowns, and honour Retry-Aft
 			return new Response(JSON.stringify({ elements: [] }));
 		}
 	};
-	runInNewContext(source, context);
+	initialise(context);
 	const api = context.KrbHazards;
 	await api.load([61, 23, 61.01, 23.01]);
 	assert.deepEqual(calls.map((url) => new URL(url).hostname), ["overpass.private.coffee", "maps.mail.ru", "overpass-api.de"]);
@@ -192,8 +199,8 @@ test("cached aggregate totals are recalculated from distinct feature flags", asy
 	data.counts.total = 0;
 	const context = { console, KrbBrowser: { storage: { local: { async get() {
 		return { osmHazardsCacheV4: [{ key: "61,23,61.02,23.02", time: Date.now(), data }] };
-	} } } }, fetch() { throw new Error("Unexpected network request"); } };
-	runInNewContext(source, context);
+	}, async set() {} } } }, fetch() { throw new Error("Unexpected network request"); } };
+	initialise(context);
 	const result = await context.KrbHazards.load([61, 23, 61.01, 23.01]);
 	assert.equal(result.counts.total, 2);
 	assert.equal(result.counts.narrow, 2);
@@ -254,14 +261,14 @@ test("clearing OSM removes persistent and memory results and forces a fresh requ
 		} } },
 		async fetch() { calls++; return new Response(JSON.stringify({ elements: [way] })); }
 	};
-	runInNewContext(source, context);
+	initialise(context);
 	const api = context.KrbHazards;
 	const bounds = [61, 23, 61.01, 23.01];
 	await api.load(bounds);
 	await api.load(bounds);
 	assert.equal(calls, 1);
 	await api.clearCache();
-	assert.equal(Object.values(stored)[0].length, 0);
+	assert.equal(api.cacheStats().areas, 0);
 	await api.load(bounds);
 	assert.equal(calls, 2);
 });
@@ -272,8 +279,8 @@ test("adjacent preloaded areas satisfy a viewport without a new request", async 
 		{ key: "61,23,61.01,23.01", time: Date.now(), data },
 		{ key: "61,23.01,61.01,23.02", time: Date.now(), data }
 	];
-	const context = { console, KrbBrowser: { storage: { local: { async get() { return { osmHazardsCacheV4: saved }; } } } } };
-	runInNewContext(source, context);
+	const context = { console, KrbBrowser: { storage: { local: { async get() { return { osmHazardsCacheV4: saved }; }, async set() {} } } } };
+	initialise(context);
 	const result = await context.KrbHazards.load([61.001, 23.005, 61.009, 23.015]);
 	assert.equal(result.features.length, data.features.length);
 	assert.equal(result.counts.total, data.counts.total);

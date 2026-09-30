@@ -5,6 +5,7 @@
 	"description": "Make MTB trail difficulty easier to read in the Komoot route planner.",
 	"permissions": [
 		"storage",
+		"unlimitedStorage",
 		"declarativeNetRequestWithHostAccess"
 	],
 	"action": {

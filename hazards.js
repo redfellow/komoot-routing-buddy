@@ -1,9 +1,8 @@
 // Shared background-side OSM acquisition and normalisation.
 (function () {
-	const cache = new Map();
+	const cacheStore = globalThis.KrbOsmCache.create();
+	let cache;
 	const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
-	const CACHE_KEY = "osmHazardsCacheV4";
-	let cacheReady;
 	const providers = [
 		"https://overpass.private.coffee/api/interpreter",
 		"https://maps.mail.ru/osm/tools/overpass/api/interpreter",
@@ -31,23 +30,9 @@
 		}
 	}
 	async function readCache() {
-		if (!cacheReady) cacheReady = (async function () {
-			try {
-				const saved = await globalThis.KrbBrowser?.storage?.local.get(CACHE_KEY);
-				for (const entry of saved?.[CACHE_KEY] || []) {
-					if (typeof entry.key === "string" && Date.now() >= entry.time && Date.now() - entry.time < CACHE_TTL && entry.data?.type === "FeatureCollection") cache.set(entry.key, entry);
-				}
-			}
-			catch (error) { console.warn("OSM cache read failed:", error); }
-		})();
-		await cacheReady;
+		cache = await cacheStore.list();
 	}
-	async function saveCache() {
-		for (const [key, entry] of cache) if (Date.now() - entry.time >= CACHE_TTL) cache.delete(key);
-		while (cache.size > 12 || JSON.stringify([...cache.values()]).length > 1500000) cache.delete(cache.keys().next().value);
-		try { await globalThis.KrbBrowser?.storage?.local.set({ [CACHE_KEY]: [...cache.values()] }); }
-		catch (error) { console.warn("OSM cache write failed:", error); }
-	}
+
 	function widthMetres(tags) {
 		const match = String(tags.width || tags.est_width || "").trim().match(/^(\d+(?:\.\d+)?)\s*(m|cm|ft)?$/);
 		return match ? Number(match[1]) * (match[2] === "cm" ? 0.01 : match[2] === "ft" ? 0.3048 : 1) : undefined;
@@ -139,17 +124,16 @@
 			await readCache();
 			// Let an existing request settle so it cannot repopulate a cleared cache.
 			if (active) await active.promise.catch((error) => console.debug("OSM request ended while clearing:", error.message));
-			cache.clear();
-			await globalThis.KrbBrowser.storage.local.set({ [CACHE_KEY]: [] });
+			await cacheStore.clear();
 		})().finally(function () { clearing = undefined; });
 		return clearing;
 	}
-	function cachedCoverage(bounds) {
+	async function cachedCoverage(bounds) {
 		let uncovered = [bounds];
 		const selected = [];
 		for (const entry of [...cache.values()].reverse()) {
 			if (Date.now() - entry.time >= CACHE_TTL) continue;
-			const box = entry.key.split(",").map(Number);
+			const box = entry.bounds;
 			let used = false;
 			uncovered = uncovered.flatMap(function (b) {
 				const s = Math.max(b[0], box[0]), w = Math.max(b[1], box[1]), n = Math.min(b[2], box[2]), e = Math.min(b[3], box[3]);
@@ -160,7 +144,11 @@
 			if (used) selected.push(entry);
 			if (!uncovered.length) {
 				const unique = new Map();
-				for (const hit of selected) for (const feature of hit.data.features) unique.set(feature.properties?.osmId || feature.id, feature);
+				for (const hit of selected) {
+					const payload = await cacheStore.read(hit.id);
+					if (!payload) return undefined;
+					for (const feature of payload.data.features) unique.set(feature.properties?.osmId || feature.id, feature);
+				}
 				const features = [...unique.values()];
 				return { type: "FeatureCollection", features, counts: countFeatures(features) };
 			}
@@ -171,9 +159,12 @@
 		boundsKey(bounds);
 		await readCache();
 		for (const hit of [...cache.values()].reverse()) {
-			if (Date.now() - hit.time < CACHE_TTL && contains(hit.key.split(",").map(Number), bounds)) {
+			if (Date.now() - hit.time < CACHE_TTL && contains(hit.bounds, bounds)) {
+				const payload = await cacheStore.read(hit.id);
+				if (!payload) continue;
+				const data = payload.data;
 				// Upgrade cached icon placement without discarding successful geometry.
-				for (const feature of hit.data.features) {
+				for (const feature of data.features) {
 					const p = feature.properties;
 					const width = p.widthMetres ?? Number(String(p.widthLabel || "").replace(/^≈/, "").replace(/m$/, ""));
 					p.icon_narrow = width > 0 && width <= 0.5;
@@ -181,11 +172,11 @@
 					const active = keys.filter((key) => p[`icon_${key}`]);
 					for (const key of keys) p[`offset_${key}`] = (active.indexOf(key) - (active.length - 1) / 2) * 30;
 				}
-				hit.data.counts = countFeatures(hit.data.features);
-				return hit.data;
+				data.counts = countFeatures(data.features);
+				return data;
 			}
 		}
-		const combined = cachedCoverage(bounds);
+		const combined = await cachedCoverage(bounds);
 		if (combined) return combined;
 		if (active) {
 			if (!prefetch && active.prefetch) {
@@ -267,8 +258,8 @@
 			const json = JSON.parse(text + decoder.decode());
 			if (json.remark || !Array.isArray(json.elements)) throw new Error("OSM returned incomplete data");
 			const data = convert(json.elements);
-			cache.set(key, { key, time: Date.now(), data });
-			await saveCache();
+			try { await cacheStore.put({ key, time: Date.now(), data }); }
+			catch (error) { console.warn("OSM area could not be cached:", error); }
 			return data;
 		}
 		catch (error) {
@@ -276,5 +267,5 @@
 			throw error;
 		}
 	}
-	globalThis.KrbHazards = { load, clearCache, convert, boundsKey, expandedBounds, identifyRequests, countFeatures };
+	globalThis.KrbHazards = { load, clearCache, cacheStats: cacheStore.stats, convert, boundsKey, expandedBounds, identifyRequests, countFeatures };
 })();

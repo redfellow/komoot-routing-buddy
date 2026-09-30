@@ -27,7 +27,7 @@ test("browser builds share runtime code, select the right background and exclude
 				assert.equal(png.readUInt32BE(20), size);
 			}
 			if (browser === "firefox") {
-				assert.deepEqual(manifest.background, { scripts: ["browser-api.js", "hazards.js", "background.js"] });
+				assert.deepEqual(manifest.background, { scripts: ["browser-api.js", "osm-cache.js", "hazards.js", "background.js"] });
 				assert.equal(manifest.browser_specific_settings.gecko.id, "komoot-routing-buddy@redfellow");
 			}
 			else {

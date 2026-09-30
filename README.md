@@ -63,7 +63,7 @@ The extension stores your local preferences in the browser and reads the page st
 
 Technical build, test, and release information has been moved to [READMORE.md](READMORE.md). The release checklist and distribution notes are also documented in [docs/RELEASING.md](docs/RELEASING.md).
 
-New OSM queries include up to a 20% margin on each side within the 25 km² limit. Cached areas serve any fully contained viewport, including nearby pans and zooms. Counts refer to the returned cached area. Successful OSM results are cached locally for 7 days (bounded to 12 areas and a size limit). Failed responses are not cached. Use Clear OSM cache in settings to discard stored results and reload the current view. The floater header shows loading, completed, and throttled request states and the number of distinct mapped hazard features. The detailed count uses under 1 metre for narrow trails; categories can overlap.
+New OSM queries include up to a 20% margin on each side within the 25 km² limit. Cached areas serve any fully contained viewport, including nearby pans and zooms. Counts refer to the returned cached area. Successful OSM results are cached locally for 7 days (stored per area in IndexedDB, with a 512 MiB serialized-data budget and a 4,096-area limit, evicting least recently used areas first). Failed responses are not cached. Use Clear OSM cache in settings to discard stored results and reload the current view. The floater header shows loading, completed, and throttled request states and the number of distinct mapped hazard features. The detailed count uses under 1 metre for narrow trails; categories can overlap.
 
 Optional **Preload hazards along route** caches up to eight roughly 1km route cells
 with a 300m margin, starting near the current map view. Queries run sequentially
@@ -72,3 +72,8 @@ Queued areas are replaced after route edits or panning, and preloading stops on
 API errors. Adjacent cached areas can jointly satisfy a viewport request.
 Only area bounds are sent to the existing OSM providers; enabling this option
 can send bounds outside the visible map. It is off by default.
+
+
+OSM cache reads load only the required area, never rewrite its geometry, and keep a small 16 MiB hot-data cache (serialized size) in memory. Startup loads just the area index. The surviving entries from the old cache migrate automatically; areas it previously evicted must be downloaded once again. **Clear OSM cache** removes both disk and memory data.
+
+The extension requests `unlimitedStorage` for its larger local OSM cache while imposing the above application limits. See the [Chrome storage documentation](https://developer.chrome.com/docs/extensions/develop/concepts/storage-and-cookies) and [Firefox permissions documentation](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/permissions#unlimited_storage).
