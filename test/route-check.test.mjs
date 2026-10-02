@@ -342,7 +342,7 @@ test("trail checks exclude cycleways, roads and paved paths even with MTB and ob
 	}
 });
 
-test("unpaved paths require MTB scale; missing and mixed surfaces stay unknown", function () {
+test("unpaved paths require MTB scale; explicit unknown and mixed surfaces stay unknown", function () {
 	for (const highway of ["path", "track", "footway", "bridleway"]) {
 		for (const surface of ["unpaved", "dirt", "ground", "gravel", "compacted"]) {
 			const rated = api.analyse(route(), [way(1, undefined, { highway, surface, trailRating: "S3" })]);
@@ -354,7 +354,7 @@ test("unpaved paths require MTB scale; missing and mixed surfaces stay unknown",
 			assert.equal(unrated.warnings.length, 0);
 		}
 	}
-	for (const surface of [undefined, "", "unknown", "asphalt;dirt"]) {
+	for (const surface of ["unknown", "asphalt;dirt"]) {
 		const result = api.analyse(route(), [way(1, undefined, { surface, trailRating: "S5", widthMetres: undefined })]);
 		assert.ok(result.unknown.surface > 199);
 		assert.equal(result.unknown.rating + result.unknown.width, 0);
@@ -365,4 +365,44 @@ test("unpaved paths require MTB scale; missing and mixed surfaces stay unknown",
 test("obstacle nodes on excluded cycleways do not produce trail warnings", function () {
 	const node = { type: "Feature", id: "node/2", geometry: { type: "Point", coordinates: point(100) }, properties: { osmId: "node/2", parentWayIds: ["way/1"], log: true, other: true, widthMetres: 0.1 } };
 	assert.equal(api.analyse(route(), [way(1, undefined, { highway: "cycleway" }), node]).warnings.length, 0);
+});
+
+
+test("MTB-rated paths without surface are assumed unpaved and checked at the selected maximum", function () {
+	for (const highway of ["path", "track", "footway", "bridleway"]) {
+		for (const surface of [undefined, "", "  "]) {
+			const feature = way(1, undefined, { highway, surface });
+			const result = api.analyse(route(), [feature], { maximumLevel: "S0" });
+			assert.ok(result.checkedDistance > 199);
+			assert.equal(result.unknown.surface, 0);
+			assert.equal(result.warnings.length, 1);
+			assert.equal(result.warnings[0].text, "S1 trail exceeds S0");
+			assert.equal(api.analyse(route(), [feature], { maximumLevel: "S1" }).warnings.length, 0);
+		}
+	}
+});
+
+test("missing surface does not suppress width, way hazards or member-node hazards", function () {
+	const feature = way(1, undefined, { surface: undefined, widthMetres: 0.3, mud: true });
+	const node = { type: "Feature", id: "node/2", geometry: { type: "Point", coordinates: point(100) }, properties: { osmId: "node/2", parentWayIds: ["way/1"], log: true, other: true } };
+	const result = api.analyse(route(), [feature, node], { maximumLevel: "S0" });
+	assert.ok(result.warnings.some((w) => w.text === "Fallen tree"));
+	assert.ok(result.warnings.some((w) => w.text === "Muddy surface"));
+	assert.ok(result.warnings.some((w) => w.kind === "width"));
+	const allowed = api.analyse(route(), [feature, node], { maximumLevel: "S0", allowHazards: true });
+	assert.deepEqual(Array.from(allowed.warnings, (w) => w.kind).sort(), ["difficulty", "width"]);
+});
+
+test("missing surface without valid MTB rating stays unknown and excluded road classes stay excluded", function () {
+	for (const trailRating of [undefined, "", "unknown"]) {
+		const result = api.analyse(route(), [way(1, undefined, { surface: undefined, trailRating })]);
+		assert.ok(result.unknown.surface > 199);
+		assert.equal(result.checkedDistance, 0);
+		assert.equal(result.warnings.length, 0);
+	}
+	for (const highway of ["cycleway", "residential", "primary", "service", "road"]) {
+		const result = api.analyse(route(), [way(1, undefined, { highway, surface: undefined, trailRating: "S5", mud: true })]);
+		assert.equal(result.checkedDistance, 0);
+		assert.equal(result.warnings.length, 0);
+	}
 });

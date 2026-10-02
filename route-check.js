@@ -120,12 +120,14 @@
 		if (p.narrow && !(p.widthMetres > 0) && !labels.includes("Narrow")) labels.push("Narrow trail — width unknown");
 		return [...new Set(labels)].join(" · ") || "Obstacle / hazard";
 	}
-	// Missing / mixed surface tags do not establish an unpaved trail.
+	// A valid MTB rating implies unpaved only when the surface tag is absent.
 	const unpavedSurfaces = new Set(["unpaved", "compacted", "fine_gravel", "gravel", "pebblestone", "ground", "dirt", "earth", "grass", "mud", "sand", "woodchips", "rock", "stone", "clay"]);
 	const pavedSurfaces = new Set(["paved", "asphalt", "concrete", "concrete:lanes", "concrete:plates", "paving_stones", "sett", "cobblestone", "unhewn_cobblestone", "metal", "wood", "rubber", "plastic"]);
 	function trailSurface(p) {
 		if (!["path", "track", "footway", "bridleway"].includes(p.highway)) return "excluded";
-		const surfaces = String(p.surface || "").split(";").map((value) => value.trim().toLowerCase());
+		const surface = String(p.surface || "").trim();
+		if (!surface && rating(p.trailRating) !== undefined) return "unpaved";
+		const surfaces = surface.split(";").map((value) => value.trim().toLowerCase());
 		if (surfaces.every((value) => unpavedSurfaces.has(value))) return "unpaved";
 		if (surfaces.every((value) => pavedSurfaces.has(value))) return "excluded";
 		return "unknown";
