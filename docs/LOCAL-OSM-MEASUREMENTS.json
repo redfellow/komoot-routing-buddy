@@ -1,0 +1,87 @@
+{
+  "header": {
+    "osmosis_replication_timestamp": "2026-09-30T20:22:42Z",
+    "osmosis_replication_sequence_number": "4927",
+    "osmosis_replication_base_url": "https://download.geofabrik.de/europe/finland-updates"
+  },
+  "counts": {
+    "other_highways": 1071110,
+    "footway": 217193,
+    "vertices": 12821236,
+    "cycleway": 148521,
+    "path": 306189,
+    "track": 476664,
+    "missing_surface": 574092,
+    "bridleway": 600,
+    "rated": 196223
+  },
+  "hazard_nodes": 28006,
+  "uncompressed_bytes": {
+    "other-highways": 647316695,
+    "required": 714003260,
+    "rated-only": 132238997
+  },
+  "gzip_bytes": {
+    "required": 154526183,
+    "rated-only": 28549603,
+    "other-highways": 142485399
+  },
+  "elapsed_seconds": 205.563811958,
+  "maxrss_bytes": 1750417408,
+  "source": {
+    "url": "https://download.geofabrik.de/europe/finland-260930.osm.pbf",
+    "bytes": 768993576,
+    "download_seconds": 60.778766,
+    "md5": "d77aaee715dfa708ad5f1b43357dcd87"
+  },
+  "environment": {
+    "machine": "MacBookAir10,1 ARM64",
+    "memory_bytes": 17179869184,
+    "pyosmium": "4.3.1",
+    "date": "2026-10-02"
+  },
+  "index": {
+    "seconds": 19.696950208,
+    "bytes": 901414912,
+    "records": 1177173
+  },
+  "synthetic_probe": [
+    {
+      "query_read_seconds": 0.387504959,
+      "elements": 9209
+    },
+    {
+      "areas": 52,
+      "km": 50.40478492970785,
+      "features": 9209,
+      "conversion_ms": 132.527375,
+      "analysis_ms": 209.87804200000005,
+      "total_ms": 787.7655410000001,
+      "warnings": 4,
+      "checked_km": 0.4699513770475197
+    }
+  ],
+  "repeat_probe": [
+    {
+      "query_read_seconds": 0.38598775,
+      "elements": 9209
+    },
+    {
+      "areas": 52,
+      "km": 50.40478492970785,
+      "features": 9209,
+      "conversion_ms": 119.95841700000005,
+      "analysis_ms": 207.17541599999993,
+      "total_ms": 770.3584999999999,
+      "warnings": 4,
+      "checked_km": 0.4699513770475197
+    }
+  ],
+  "diff_sample": {
+    "sequence": 4927,
+    "gzip_bytes": 1323377,
+    "nodes": 38341,
+    "ways": 4683,
+    "relations": 175
+  }
+}
