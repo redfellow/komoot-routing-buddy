@@ -48,7 +48,7 @@ No build, packaging, version bump or release unless explicitly requested. Inclus
 
 ## Buckets
 
-### 1. Measure feasibility — reviewed and accepted; commit pending
+### 1. Measure feasibility — accepted, committed and pushed
 
 Plan:
 - Inspect current acquisition, normalization, cache, matching and rendering requirements.
@@ -59,9 +59,9 @@ Plan:
 
 Checkpoint: measured raw/filtered/compressed sizes; provider recommendation; preservation of required fields/topology; desktop resource constraints; proposed distribution/update design; unresolved questions; go/no-go recommendation. Do not promise the five-second target or one-to-two-minute download without evidence.
 
-### 2. Build the local data command
+### 2. Build the local data command — reviewed and accepted
 
-Proposed implementation plan (bucket 1 findings and direction accepted; commit checkpoint pending):
+Approved implementation plan:
 1. Add a documented local preparation command using a pinned parser dependency. Download or reuse a dated Geofabrik Finland PBF, verify its checksum, and record the source timestamp and coverage polygon.
 2. Stream extraction of the current required way classes and hazard nodes. Preserve the consumed tags, original IDs, full geometry and node membership, including unrated paths and cycleways needed as matching competitors. Do not change trail eligibility.
 3. Produce a versioned compressed dataset with a spatial directory and manifest containing provenance, coverage, counts and checksums. Keep generated bulk data outside Git. Browser storage/import implementation belongs to bucket 3.
@@ -120,3 +120,7 @@ Final cleanup after the user accepts the feature as finished:
 - 2026-10-02: User accepted the bucket 1 feasibility report and confirmed all three direction decisions: bundle full Finland; prototype weekly public raw-PBF downloads plus browser processing; retain deliberate Overpass refresh for the current route. Browser feasibility remains unproven. Bucket 2's concrete implementation plan is recorded above. Investigation-document commit approval remains pending; earlier runtime/UI changes remain separate.
 
 - 2026-10-02: User explicitly approved the investigation-document commit and push and proceeding with the presented bucket 2 plan. Bucket 2 is now in progress.
+
+- 2026-10-02: Investigation committed and pushed as `d2c8952`. Bucket 2 command, versioned spatial output, tests and usage documentation implemented. Full Finland: 151.12 MB payload + 0.37 MB manifest, 207.3 s preparation, 2.01 GB peak native RSS. See [LOCAL-OSM-DATA.md](LOCAL-OSM-DATA.md) and [LOCAL-OSM-PREPARATION-MEASUREMENTS.json](LOCAL-OSM-PREPARATION-MEASUREMENTS.json). No extension build or packaging performed. Bucket 2 changes await user review and commit approval; bucket 3 has not started.
+
+- 2026-10-02: User reviewed bucket 2 and approved carrying onward through the agreed commit/push checkpoint to bucket 3.

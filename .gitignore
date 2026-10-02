@@ -6,3 +6,7 @@
 /node_modules/
 /dist/
 /artifacts/
+
+/local-osm-data/
+/.venv-local-osm/
+/scripts/local-osm/__pycache__/

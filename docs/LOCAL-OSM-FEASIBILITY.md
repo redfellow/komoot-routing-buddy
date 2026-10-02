@@ -1,6 +1,6 @@
 # Local Finland OSM: bucket 1 findings
 
-2026-10-02. **Investigation reviewed and accepted. All three proposed direction decisions approved; investigation commit pending.**
+2026-10-02. **Investigation reviewed and accepted. All three proposed direction decisions approved; investigation committed and pushed as `d2c8952`.**
 
 ## Recommendation
 
@@ -93,4 +93,4 @@ Accepted direction and remaining implementation decisions:
 
 The user confirmed bundled full Finland, roughly 769 MB weekly raw downloads plus local processing as the update direction to prototype, and deliberate Overpass use for route-only manual refresh. This approves investigation of browser processing, not a claim that its performance or reliability has been established.
 
-No extension code, build/package, commit or release was performed for bucket 1. The report review is complete. Explicit approval to commit the investigation documents remains pending at the agreed checkpoint; see the bucket 2 implementation plan in [LOCAL-OSM-PLAN.md](LOCAL-OSM-PLAN.md).
+No extension code, build/package, commit or release was performed for bucket 1. The report review is complete. The user subsequently approved the investigation commit, pushed as `d2c8952`; see the bucket 2 implementation plan in [LOCAL-OSM-PLAN.md](LOCAL-OSM-PLAN.md).
