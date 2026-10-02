@@ -38,7 +38,7 @@ const route = { type: "Feature", geometry: { type: "LineString", coordinates: [[
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 
 test("dialog defaults, completed check, clickable results and route invalidation", async function () {
-	const feature = { type: "Feature", geometry: route.geometry, properties: { osmId: "way/1", trailRating: "S2", widthMetres: 0.4 } };
+	const feature = { type: "Feature", geometry: route.geometry, properties: { osmId: "way/1", highway: "path", surface: "dirt", trailRating: "S2", widthMetres: 0.4 } };
 	const f = fixture(async () => ({ data: { type: "FeatureCollection", features: [feature] } }));
 	await f.open();
 	assert.equal(f.fields.level.value, "S1");
@@ -49,7 +49,7 @@ test("dialog defaults, completed check, clickable results and route invalidation
 	f.receive({ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: request.requestId, route, routeKey: "test-route" });
 	await flush();
 	assert.equal(f.fields.start.disabled, false);
-	assert.match(f.fields.status.textContent, /1 route warning/);
+	assert.match(f.fields.status.textContent, /1 trail warning/);
 	f.fields.results.children[0].children[0].click();
 	assert.equal(f.messages.at(-1).type, "KRB_ROUTE_FOCUS");
 	f.receive({ type: "KRB_ROUTE_CHANGED" });
@@ -72,7 +72,7 @@ test("cancel ignores late data and retry shows incomplete errors", async functio
 	const retry = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
 	f.receive({ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: retry.requestId, route, routeKey: "test" });
 	await flush(); finish({ error: "HTTP 429", retryMs: 30000, permanent: true }); await flush();
-	assert.match(f.fields.status.textContent, /Check incomplete.*429.*30s/);
+	assert.match(f.fields.status.textContent, /Trail check incomplete.*429.*30s/);
 	assert.equal(f.fields.start.textContent, "Retry");
 });
 
@@ -82,9 +82,9 @@ test("completed check uses requested wording and keeps unknown information visib
 	const request = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
 	f.receive({ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: request.requestId, route, routeKey: "test" });
 	await flush();
-	assert.equal(f.fields.status.textContent, "The route doesn't contain issues according to Komoot & OSM data.");
+	assert.equal(f.fields.status.textContent, "No MTB-rated unpaved trails were identified on this route.");
 	assert.equal(f.fields.progress.hidden, true);
-	assert.match(f.fields.unknown.textContent, /could not be confidently matched/);
+	assert.equal(f.fields.unknown.textContent, "");
 });
 
 test("Retry keeps the dialog's completed-area checkpoint", async function () {
@@ -108,7 +108,7 @@ test("Retry keeps the dialog's completed-area checkpoint", async function () {
 	await flush();
 	assert.equal(requested[2], requested[1]);
 	assert.equal(requested.filter((value) => value === requested[0]).length, 1);
-	assert.equal(f.fields.start.textContent, "Check route");
+	assert.equal(f.fields.start.textContent, "Check trails");
 });
 
 test("temporary failures keep the dialog running with an automatic retry and Cancel", async function () {
@@ -140,7 +140,7 @@ test("progress fills only for completed areas and stops on cancellation", async 
 	f.receive({ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: request.requestId, route: long, routeKey: "long" });
 	await flush();
 	assert.equal(f.fields.progress.hidden, false);
-	assert.match(f.fields.status.textContent, /Checking route… \d+%/);
+	assert.match(f.fields.status.textContent, /Checking trails… \d+%/);
 	assert.match(f.fields.counts.textContent, /^1\/\d+ areas · 1 cached · 0 downloaded$/);
 	const percent = Number(f.fields.bar.attributes["aria-valuenow"]);
 	assert.ok(percent > 0 && percent < 100);

@@ -60,7 +60,7 @@
 			const size = new TextEncoder().encode(JSON.stringify(input.data)).byteLength;
 			if (size > diskBytes) throw new Error("OSM area exceeds the disk-cache budget");
 			const entry = { id: id(input), key: input.key, bounds: input.key.split(",").map(Number), time: input.time,
-				accessed: input.accessed ?? now(), routeComplete: input.routeComplete === true, bytes: size };
+				accessed: input.accessed ?? now(), routeComplete: input.routeComplete === true, trailSchema: input.data.trailSchema || 0, bytes: size };
 			let targetBytes = bytes - (entries.get(entry.id)?.bytes || 0) + size;
 			let targetAreas = entries.size + (entries.has(entry.id) ? 0 : 1);
 			const victims = [];

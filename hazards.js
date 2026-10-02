@@ -148,9 +148,9 @@
 			const featureId = fragment ? `${id}/${fragment}` : id;
 			if (seen.has(featureId)) return;
 			seen.add(featureId);
-			features.push({ type: "Feature", id: featureId, properties: { ...(forRoute ? { parentWayIds: geometry.type === "Point" ? [...(parentWays.get(element.id) || [])] : [], ratedParent: geometry.type === "Point" && ratedNodes.has(element.id), layer: element.tags?.layer, bridge: element.tags?.bridge, tunnel: element.tags?.tunnel, widthEstimated: !element.tags?.width && Boolean(element.tags?.est_width) } : {}), label, widthMetres: widthMetres(element.tags || {}), ...iconDetails(element.tags || {}), widthLabel: geometry.type === "LineString" ? widthLabel(element.tags || {}) : "", trailRating: geometry.type === "LineString" && /^[0-5][+-]?$/.test(element.tags?.["mtb:scale"] || "") ? `S${element.tags["mtb:scale"]}` : "", osmId: id, ...categories(element.tags || {}) }, geometry });
+			features.push({ type: "Feature", id: featureId, properties: { ...(forRoute ? { highway: element.tags?.highway, surface: element.tags?.surface, parentWayIds: geometry.type === "Point" ? [...(parentWays.get(element.id) || [])] : [], ratedParent: geometry.type === "Point" && ratedNodes.has(element.id), layer: element.tags?.layer, bridge: element.tags?.bridge, tunnel: element.tags?.tunnel, widthEstimated: !element.tags?.width && Boolean(element.tags?.est_width) } : {}), label, widthMetres: widthMetres(element.tags || {}), ...iconDetails(element.tags || {}), widthLabel: geometry.type === "LineString" ? widthLabel(element.tags || {}) : "", trailRating: geometry.type === "LineString" && /^[0-5][+-]?$/.test(element.tags?.["mtb:scale"] || "") ? `S${element.tags["mtb:scale"]}` : "", osmId: id, ...categories(element.tags || {}) }, geometry });
 		}
-		return { type: "FeatureCollection", features, counts: countFeatures(features) };
+		return { type: "FeatureCollection", ...(forRoute ? { trailSchema: 1 } : {}), features, counts: countFeatures(features) };
 	}
 	function countFeatures(features) {
 		const counts = { total: 0, mud: 0, vegetation: 0, narrow: 0, other: 0 };
@@ -182,7 +182,7 @@
 		let uncovered = [bounds];
 		const selected = [];
 		for (const entry of [...cache.values()].reverse()) {
-			if (Date.now() - entry.time >= CACHE_TTL || forRoute && !entry.routeComplete) continue;
+			if (Date.now() - entry.time >= CACHE_TTL || forRoute && (!entry.routeComplete || entry.trailSchema !== 1)) continue;
 			const box = entry.bounds;
 			let used = false;
 			uncovered = uncovered.flatMap(function (b) {
@@ -207,7 +207,7 @@
 				}
 				const features = [...unique.values()];
 				const data = { type: "FeatureCollection", features, counts: countFeatures(features) };
-				return forRoute ? { ...data, cacheSource: "cache" } : data;
+				return forRoute ? { ...data, trailSchema: 1, cacheSource: "cache" } : data;
 			}
 		}
 	}
@@ -246,7 +246,7 @@
 		boundsKey(bounds);
 		await readCache();
 		for (const hit of [...cache.values()].reverse()) {
-			if ((!forRoute || hit.routeComplete) && Date.now() - hit.time < CACHE_TTL && contains(hit.bounds, bounds)) {
+			if ((!forRoute || hit.routeComplete && hit.trailSchema === 1) && Date.now() - hit.time < CACHE_TTL && contains(hit.bounds, bounds)) {
 				const payload = await cacheStore.read(hit.id);
 				if (!payload) continue;
 				const data = payload.data;

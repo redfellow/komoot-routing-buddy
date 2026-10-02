@@ -545,3 +545,28 @@ test("one failed provider falls back without interrupting the other active provi
 	pending[1].finish(); pending[2].finish();
 	await Promise.all([a, b]);
 });
+
+test("route cache refreshes legacy entries missing way type and surface, preserving map use", async function () {
+	const indexedDB = new IDBFactory();
+	const seed = { indexedDB, TextEncoder };
+	runInNewContext(readFileSync(new URL("../osm-cache.js", import.meta.url), "utf8"), seed);
+	const cache = seed.KrbOsmCache.create();
+	const legacy = setup().convertRoute([{ ...way, tags: { ...way.tags, highway: "path" } }]);
+	delete legacy.trailSchema;
+	await cache.put({ key: "61,23,61.02,23.02", time: Date.now(), routeComplete: true, data: legacy });
+	await cache.close();
+	let calls = 0;
+	const context = { indexedDB, URL, URLSearchParams, AbortSignal, TextDecoder, async fetch() {
+		calls++;
+		return new Response(JSON.stringify({ elements: [{ ...way, tags: { ...way.tags, highway: "path", surface: "dirt" } }] }));
+	} };
+	initialise(context);
+	await context.KrbHazards.load([61, 23, 61.01, 23.01]);
+	assert.equal(calls, 0);
+	const data = await context.KrbHazards.loadRoute([61, 23, 61.01, 23.01]);
+	assert.equal(calls, 1);
+	assert.equal(data.features[0].properties.highway, "path");
+	assert.equal(data.features[0].properties.surface, "dirt");
+	await context.KrbHazards.loadRoute([61, 23, 61.01, 23.01]);
+	assert.equal(calls, 1);
+});

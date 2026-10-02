@@ -25,7 +25,7 @@ S-level +/- modifiers use quarter-level ordering: S1+ exceeds S1, S1− does not
 
 ## Result contract
 
-A fixed route snapshot is checked with separate saved preferences. Failed coverage says Check incomplete and offers Retry, with partial findings retained. A geometry edit clears obsolete findings. A completed check with no findings uses exactly: “The route doesn't contain issues according to Komoot & OSM data.” Missing-data distances are displayed separately, even for that result.
+A fixed route snapshot is checked with separate saved preferences. Failed coverage says Check incomplete and offers Retry, with partial findings retained. A geometry edit clears obsolete findings. A completed check with no findings uses exactly: “No issues found on matched trails according to Komoot & OSM data.” Missing-data distances are displayed separately, even for that result.
 
 ## Validation
 
@@ -72,3 +72,12 @@ Explicit checks run two workers, each reserving up to four consecutive uncomplet
 All background OSM callers share a two-request limit and reuse in-flight requests that fully cover their area. Each provider has one active request maximum. Private Coffee and Mail.ru are preferred; overpass-api.de remains the fallback. Existing per-provider cooldowns and Retry-After handling apply independently. Clearing the cache waits for both active downloads before clearing stored results. Cancellation leaves already-dispatched background work free to finish into the cache.
 
 The progress detail reports active area checks (which may be cache reads or downloads), rather than claiming to count live HTTP requests. Tests cover global/provider caps, concurrent identical-area deduplication, independent fallback, cache clearing, fast-worker scheduling, out-of-order retry checkpoints and cancellation.
+
+
+## Trail eligibility and unknown distances
+
+Route conversion now preserves OSM highway and surface values. Only `path`, `track`, `footway` and `bridleway` with recognised unpaved surfaces and a valid MTB scale receive difficulty, width or obstacle checks. Cycleways and road/street classes are excluded even when they have MTB or hazard tags. Excluded ways remain available as geometric competitors to avoid snapping to nearby trails. The query already omits ordinary road/street classes; unmatched route distance is retained internally for diagnostics but is no longer presented as unknown trail kilometres.
+
+Unpaved paths without an MTB scale contribute only to unknown-rating distance. Eligible path/track classes with missing, unrecognised or mixed paved/unpaved surface tags contribute only to unknown-surface distance and are not assessed. Missing-width distance applies only to assessed MTB-rated unpaved trails. Obstacle-node checks use the same eligibility gate on the matched parent way. A route without any assessed trails receives an explicit no-trails-identified result.
+
+Komoot summary labels (singletrack, dual track, street, etc.) are not exposed in the route geometry inspected so far; they are not inferred from width or names. Classification uses the OSM tags actually returned. Route payloads and cache metadata carry `trailSchema: 1`: older entries without the newly retained tags cannot satisfy a trail check and are refreshed on demand, while map display continues to reuse them.

@@ -1,6 +1,6 @@
 // Pure route analysis plus cancellable, sequential area collection.
 (function () {
-	const SUCCESS = "The route doesn't contain issues according to Komoot & OSM data.";
+	const SUCCESS = "No issues found on matched trails according to Komoot & OSM data.";
 	function preferences(value = {}) {
 		return { maximumLevel: /^S[0-5]$/.test(value.maximumLevel) ? value.maximumLevel : "S1",
 			minimumWidth: Number.isFinite(value.minimumWidth) ? Math.round(Math.max(0.1, Math.min(1, value.minimumWidth)) * 10) / 10 : 0.4,
@@ -120,6 +120,16 @@
 		if (p.narrow && !(p.widthMetres > 0) && !labels.includes("Narrow")) labels.push("Narrow trail — width unknown");
 		return [...new Set(labels)].join(" · ") || "Obstacle / hazard";
 	}
+	// Missing / mixed surface tags do not establish an unpaved trail.
+	const unpavedSurfaces = new Set(["unpaved", "compacted", "fine_gravel", "gravel", "pebblestone", "ground", "dirt", "earth", "grass", "mud", "sand", "woodchips", "rock", "stone", "clay"]);
+	const pavedSurfaces = new Set(["paved", "asphalt", "concrete", "concrete:lanes", "concrete:plates", "paving_stones", "sett", "cobblestone", "unhewn_cobblestone", "metal", "wood", "rubber", "plastic"]);
+	function trailSurface(p) {
+		if (!["path", "track", "footway", "bridleway"].includes(p.highway)) return "excluded";
+		const surfaces = String(p.surface || "").split(";").map((value) => value.trim().toLowerCase());
+		if (surfaces.every((value) => unpavedSurfaces.has(value))) return "unpaved";
+		if (surfaces.every((value) => pavedSurfaces.has(value))) return "excluded";
+		return "unknown";
+	}
 	function analyse(route, features, options) {
 		options = preferences(options);
 		const routeSamples = samples(route);
@@ -169,7 +179,8 @@
 			if (matches.slice(i, end).reduce((n, hit) => n + hit.sample.length, 0) < 20) for (let j = i; j < end; j++) matches[j].way = undefined;
 			i = end;
 		}
-		const warnings = [], unknown = { unmatched: 0, rating: 0, width: 0 };
+		let checkedDistance = 0;
+		const warnings = [], unknown = { unmatched: 0, rating: 0, width: 0, surface: 0 };
 		const groups = new Map();
 		function add(kind, text, sample, key, point = sample.point) {
 			const groupKey = JSON.stringify([kind, text, key, sample.part]);
@@ -183,9 +194,13 @@
 		for (const { sample, way } of matches) {
 			if (!way) { unknown.unmatched += sample.length; continue; }
 			const p = way.properties;
+			const surface = trailSurface(p);
+			if (surface === "unknown") unknown.surface += sample.length;
+			if (surface !== "unpaved") continue;
 			const level = rating(p.trailRating);
-			if (level === undefined) unknown.rating += sample.length;
-			else if (level > rating(options.maximumLevel)) add("difficulty", `${p.trailRating} trail exceeds ${options.maximumLevel}`, sample, p.trailRating);
+			if (level === undefined) { unknown.rating += sample.length; continue; }
+			checkedDistance += sample.length;
+			if (level > rating(options.maximumLevel)) add("difficulty", `${p.trailRating} trail exceeds ${options.maximumLevel}`, sample, p.trailRating);
 			if (!(p.widthMetres > 0)) unknown.width += sample.length;
 			else if (p.widthMetres < options.minimumWidth) add("width", widthText(p), sample, String(p.widthMetres));
 			if (!options.allowHazards) {
@@ -195,7 +210,7 @@
 		for (const feature of unique.values()) {
 			if (feature.geometry?.type !== "Point") continue;
 			for (const { sample, way } of matches) {
-				if (!way || !feature.properties.parentWayIds?.includes(way.properties.osmId)) continue;
+				if (!way || trailSurface(way.properties) !== "unpaved" || rating(way.properties.trailRating) === undefined || !feature.properties.parentWayIds?.includes(way.properties.osmId)) continue;
 				const hit = projection(feature.geometry.coordinates, sample.a, sample.b);
 				if (hit.distance > 8) continue;
 				const p = feature.properties;
@@ -203,7 +218,7 @@
 				if (!options.allowHazards && (p.mud || p.vegetation || p.log || p.other || p.narrow && !(p.widthMetres > 0))) add("hazard", hazardText(p), sample, p.osmId, feature.geometry.coordinates);
 			}
 		}
-		return { warnings: groupWarnings(warnings, routeSamples), unknown, distance: routeSamples.reduce((sum, s) => sum + s.length, 0) };
+		return { warnings: groupWarnings(warnings, routeSamples), unknown, checkedDistance, distance: routeSamples.reduce((sum, s) => sum + s.length, 0) };
 	}
 	async function collect(route, load, { signal, progress = function () {}, checkpoint = {}, concurrency = 1 } = {}) {
 		samples(route);

@@ -18,12 +18,12 @@
 	function showProgress(progress) {
 		clearRetryTimer();
 		const percent = progress.total ? Math.floor(progress.completed / progress.total * 100) : 0;
-		field("status").textContent = `Checking route… ${percent}%`;
+		field("status").textContent = `Checking trails… ${percent}%`;
 		field("bar").setAttribute("aria-valuenow", String(percent));
 		field("bar").setAttribute("aria-valuetext", `${progress.completed} of ${progress.total} areas checked`);
 		field("fill").style.width = `${percent}%`;
 		field("counts").textContent = `${progress.completed}/${progress.total} areas · ${progress.cached} cached · ${progress.downloaded} downloaded`;
-		field("activity").textContent = progress.completed === progress.total ? "Analysing route…" : `Checking next areas… ${progress.running || 0} active check${progress.running === 1 ? "" : "s"}`;
+		field("activity").textContent = progress.completed === progress.total ? "Analysing matched trails…" : `Checking next areas… ${progress.running || 0} active check${progress.running === 1 ? "" : "s"}`;
 	}
 	function showRetry(value) {
 		clearRetryTimer();
@@ -65,8 +65,8 @@
 			item.append(button); field("results").append(item);
 		}
 		const missing = result.unknown;
-		field("unknown").textContent = [missing.unmatched > 1 ? `${(missing.unmatched / 1000).toFixed(2)}km could not be confidently matched to OSM trails` : "", missing.rating > 1 ? `${(missing.rating / 1000).toFixed(2)}km has no difficulty rating` : "", missing.width > 1 ? `${(missing.width / 1000).toFixed(2)}km has no width data` : ""].filter(Boolean).join(" · ");
-		field("status").textContent = incomplete ? "Check incomplete" : result.warnings.length ? `${result.warnings.length} route warning${result.warnings.length === 1 ? "" : "s"}` : checker.SUCCESS;
+		field("unknown").textContent = [missing.surface > 1 ? `${(missing.surface / 1000).toFixed(2)}km of paths has an unknown surface (not assessed)` : "", missing.rating > 1 ? `${(missing.rating / 1000).toFixed(2)}km of unpaved paths has no MTB scale (unknown)` : "", missing.width > 1 ? `${(missing.width / 1000).toFixed(2)}km of MTB-rated unpaved trails has no width data` : ""].filter(Boolean).join(" · ");
+		field("status").textContent = incomplete ? "Trail check incomplete" : result.warnings.length ? `${result.warnings.length} trail warning${result.warnings.length === 1 ? "" : "s"}` : result.checkedDistance > 0 ? checker.SUCCESS : "No MTB-rated unpaved trails were identified on this route.";
 		position();
 	}
 	async function check(snapshot, key, controller) {
@@ -96,12 +96,12 @@
 			if (error.features) collected = error.features;
 			try { render(true); }
 			catch (renderError) { console.debug("Route check has no analysable snapshot:", renderError.message); }
-			field("status").textContent = `Check incomplete — ${error.message}${error.retryMs ? `. Retry in ${Math.ceil(error.retryMs / 1000)}s.` : ""}`;
+			field("status").textContent = `Trail check incomplete — ${error.message}${error.retryMs ? `. Retry in ${Math.ceil(error.retryMs / 1000)}s.` : ""}`;
 		}
 		finally {
 			if (run === controller) {
 				run = undefined; busy(false);
-				field("start").textContent = failed ? "Retry" : "Check route";
+				field("start").textContent = failed ? "Retry" : "Check trails";
 				post({ type: "KRB_ROUTE_CHECK_ACTIVE", active: false });
 				position();
 			}
@@ -119,17 +119,17 @@
 		busy(true); showProgress({ completed: 0, total: 0, cached: 0, downloaded: 0 });
 		field("status").textContent = "Reading Komoot route…";
 		field("counts").textContent = "";
-		field("activity").textContent = "Preparing route check…";
+		field("activity").textContent = "Preparing trail check…";
 		post({ type: "KRB_ROUTE_CHECK_ACTIVE", active: true });
 		post({ type: "KRB_ROUTE_SNAPSHOT", requestId });
-		requestTimer = setTimeout(function () { stop("Check incomplete — map did not respond. Try again."); }, 5000);
+		requestTimer = setTimeout(function () { stop("Trail check incomplete — map did not respond. Try again."); }, 5000);
 	}
 	function open() {
 		if (!dialog) {
 			dialog = document.createElement("section");
 			dialog.id = "krb-route-dialog"; dialog.className = "krb-route";
 			dialog.setAttribute("role", "dialog"); dialog.setAttribute("aria-labelledby", "krb-route-title");
-			dialog.innerHTML = `<button type="button" class="krb-settings__close" data-route="close" aria-label="Close route checker">×</button><h2 id="krb-route-title">Check route</h2><fieldset data-route="preferences"><label>Maximum trail level<select data-route="level">${[0, 1, 2, 3, 4, 5].map((n) => `<option value="S${n}">S${n}</option>`).join("")}</select></label><label>Minimum trail width <output data-route="width-value">0.4m</output><input data-route="width" type="range" min="0.1" max="1" step="0.1" value="0.4"></label><label class="krb-route__checkbox"><input data-route="hazards" type="checkbox"> Allow hazards</label><p class="krb-route__help">Allow hazards ignores mud, vegetation and obstacles. Difficulty and minimum width still apply.</p></fieldset><div class="krb-route__actions"><button type="button" data-route="start">Check route</button><button type="button" data-route="cancel" hidden>Cancel</button></div><p data-route="status" role="status" aria-live="polite">Check the current route against Komoot geometry and OSM trail data.</p><div class="krb-route__progress" data-route="progress" hidden><div class="krb-route__bar" data-route="bar" role="progressbar" aria-label="Route areas checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="krb-route__fill" data-route="fill"></span></div><p class="krb-route__help" data-route="counts"></p><p class="krb-route__help" data-route="activity"></p></div><p class="krb-route__help" data-route="unknown"></p><ol data-route="results" class="krb-route__results"></ol><a class="krb-route__help" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a>`;
+			dialog.innerHTML = `<button type="button" class="krb-settings__close" data-route="close" aria-label="Close trail checker">×</button><h2 id="krb-route-title">Check trails along route</h2><p class="krb-route__help">Checks unpaved trails with an MTB scale. Roads, streets and cycleways are excluded. Unpaved paths without an MTB scale are listed as unknown. Unmatched sections and paths without a known unpaved surface are not assessed.</p><fieldset data-route="preferences"><label>Maximum trail level<select data-route="level">${[0, 1, 2, 3, 4, 5].map((n) => `<option value="S${n}">S${n}</option>`).join("")}</select></label><label>Minimum trail width <output data-route="width-value">0.4m</output><input data-route="width" type="range" min="0.1" max="1" step="0.1" value="0.4"></label><label class="krb-route__checkbox"><input data-route="hazards" type="checkbox"> Allow hazards</label><p class="krb-route__help">Allow hazards ignores mud, vegetation and obstacles. Difficulty and minimum width still apply.</p></fieldset><div class="krb-route__actions"><button type="button" data-route="start">Check trails</button><button type="button" data-route="cancel" hidden>Cancel</button></div><p data-route="status" role="status" aria-live="polite">Check MTB-rated unpaved trails along your Komoot route using OSM data.</p><div class="krb-route__progress" data-route="progress" hidden><div class="krb-route__bar" data-route="bar" role="progressbar" aria-label="Trail data areas checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="krb-route__fill" data-route="fill"></span></div><p class="krb-route__help" data-route="counts"></p><p class="krb-route__help" data-route="activity"></p></div><p class="krb-route__help" data-route="unknown"></p><ol data-route="results" class="krb-route__results"></ol><a class="krb-route__help" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a>`;
 			document.documentElement.append(dialog);
 			field("level").value = preferences.maximumLevel;
 			field("width").value = String(preferences.minimumWidth);
@@ -142,8 +142,8 @@
 				if (route) render(failed);
 			});
 			field("start").addEventListener("click", start);
-			field("cancel").addEventListener("click", function () { stop("Check cancelled. Completed areas remain cached."); failed = true; field("start").textContent = "Retry"; });
-			function close() { stop(run ? "Check cancelled. Completed areas remain cached." : undefined); dialog.hidden = true; trigger.setAttribute("aria-expanded", "false"); trigger.focus(); }
+			field("cancel").addEventListener("click", function () { stop("Trail check cancelled. Completed areas remain cached."); failed = true; field("start").textContent = "Retry"; });
+			function close() { stop(run ? "Trail check cancelled. Completed areas remain cached." : undefined); dialog.hidden = true; trigger.setAttribute("aria-expanded", "false"); trigger.focus(); }
 			field("close").addEventListener("click", close);
 			dialog.addEventListener("keydown", function (event) { event.stopPropagation(); if (event.key === "Escape") close(); });
 			new MutationObserver(position).observe(panel, { attributes: true, attributeFilter: ["style", "open"] });
@@ -159,22 +159,22 @@
 		if (message?.type === "KRB_ROUTE_SNAPSHOT_DATA" && message.requestId === requestId && run && !run.snapshotReceived) {
 			clearTimeout(requestTimer);
 			run.snapshotReceived = true;
-			if (message.error) { stop(`Check incomplete — ${message.error}`); return; }
+			if (message.error) { stop(`Trail check incomplete — ${message.error}`); return; }
 			void check(message.route, message.routeKey, run);
 		}
 		if (message?.type === "KRB_ROUTE_CHANGED" && (route || run)) {
-			stop("Route changed — results are outdated. Check the route again.");
+			stop("Route changed — trail results are outdated. Check trails again.");
 			route = undefined; collected = []; checkpoint = {};
 			field("results").replaceChildren(); field("unknown").textContent = "";
-			field("start").textContent = "Check route";
+			field("start").textContent = "Check trails";
 		}
 	});
 	function attach(element) {
 		panel = element;
 		trigger = document.createElement("button");
 		trigger.type = "button"; trigger.className = "krb-panel__settings krb-panel__route";
-		trigger.setAttribute("aria-label", "Check route"); trigger.setAttribute("aria-expanded", "false"); trigger.title = "Check route";
-		trigger.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 19V8a4 4 0 0 1 8 0v8a3 3 0 0 0 6 0V5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="5" cy="19" r="3" fill="currentColor"/><path d="m15 5 3 3 5-6" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
+		trigger.setAttribute("aria-label", "Check trails"); trigger.setAttribute("aria-expanded", "false"); trigger.title = "Check trails";
+		trigger.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="m15.4 15.4 5.1 5.1"/><path d="M10 5.7 14.2 13H5.8Z" stroke-width="1.2" stroke-linejoin="round"/><path d="M10 8.3v1.8" stroke-width="1.3"/><circle cx="10" cy="11.6" r=".65" fill="currentColor" stroke="none"/></svg>`;
 		panel.querySelector(".krb-panel__settings").before(trigger);
 		trigger.addEventListener("click", async function (event) {
 			event.preventDefault(); event.stopPropagation();

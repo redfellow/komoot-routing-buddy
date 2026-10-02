@@ -7,7 +7,7 @@ runInNewContext(readFileSync(new URL("../route-check.js", import.meta.url), "utf
 const api = context.KrbRouteCheck;
 const point = (x, y = 0) => [23 + x / (111195 * Math.cos(61 * Math.PI / 180)), 61 + y / 111195];
 const route = (coordinates = [point(0), point(200)], properties = {}) => ({ type: "Feature", properties, geometry: { type: "LineString", coordinates } });
-const way = (id, coordinates = [point(0), point(200)], properties = {}) => ({ type: "Feature", id: `way/${id}`, properties: { osmId: `way/${id}`, trailRating: "S1", widthMetres: 0.4, ...properties }, geometry: { type: "LineString", coordinates } });
+const way = (id, coordinates = [point(0), point(200)], properties = {}) => ({ type: "Feature", id: `way/${id}`, properties: { osmId: `way/${id}`, highway: "path", surface: "dirt", trailRating: "S1", widthMetres: 0.4, ...properties }, geometry: { type: "LineString", coordinates } });
 
 test("defaults and preference bounds are independent of map display", function () {
 	assert.equal(api.preferences().maximumLevel, "S1");
@@ -59,7 +59,7 @@ test("reversed travel and repeated visits preserve route distances", function ()
 test("unrated and missing width remain unknown, short isolated matches are rejected", function () {
 	const unknown = api.analyse(route(), [way(1, undefined, { trailRating: "", widthMetres: undefined })]);
 	assert.ok(unknown.unknown.rating > 199);
-	assert.ok(unknown.unknown.width > 199);
+	assert.equal(unknown.unknown.width, 0);
 	assert.equal(unknown.warnings.length, 0);
 	const short = api.analyse(route(), [way(2, [point(90), point(95)], { trailRating: "S5" })]);
 	assert.equal(short.warnings.length, 0);
@@ -326,4 +326,43 @@ test("the faster worker continues while the first batch is still pending", async
 	first({ data: { type: "FeatureCollection", features: [], coveredAreas: 4 } });
 	await work;
 	assert.equal(checkpoint.completed, api.areas(long).length);
+});
+
+test("trail checks exclude cycleways, roads and paved paths even with MTB and obstacle tags", function () {
+	for (const highway of ["cycleway", "residential", "primary", "service", "unclassified", "road", "living_street"]) {
+		const result = api.analyse(route(), [way(1, undefined, { highway, surface: "dirt", trailRating: "S5", widthMetres: undefined, log: true })]);
+		assert.equal(result.warnings.length, 0, highway);
+		assert.equal(result.checkedDistance, 0);
+		assert.equal(result.unknown.rating + result.unknown.width + result.unknown.surface, 0);
+	}
+	for (const surface of ["paved", "asphalt", "concrete", "paving_stones"]) {
+		const result = api.analyse(route(), [way(1, undefined, { surface, trailRating: "S5", log: true })]);
+		assert.equal(result.warnings.length, 0, surface);
+		assert.equal(result.unknown.width + result.unknown.rating + result.unknown.surface, 0);
+	}
+});
+
+test("unpaved paths require MTB scale; missing and mixed surfaces stay unknown", function () {
+	for (const highway of ["path", "track", "footway", "bridleway"]) {
+		for (const surface of ["unpaved", "dirt", "ground", "gravel", "compacted"]) {
+			const rated = api.analyse(route(), [way(1, undefined, { highway, surface, trailRating: "S3" })]);
+			assert.equal(rated.warnings.length, 1);
+			assert.ok(rated.checkedDistance > 199);
+			const unrated = api.analyse(route(), [way(1, undefined, { highway, surface, trailRating: "", widthMetres: undefined, log: true })]);
+			assert.ok(unrated.unknown.rating > 199);
+			assert.equal(unrated.unknown.width, 0);
+			assert.equal(unrated.warnings.length, 0);
+		}
+	}
+	for (const surface of [undefined, "", "unknown", "asphalt;dirt"]) {
+		const result = api.analyse(route(), [way(1, undefined, { surface, trailRating: "S5", widthMetres: undefined })]);
+		assert.ok(result.unknown.surface > 199);
+		assert.equal(result.unknown.rating + result.unknown.width, 0);
+		assert.equal(result.warnings.length, 0);
+	}
+});
+
+test("obstacle nodes on excluded cycleways do not produce trail warnings", function () {
+	const node = { type: "Feature", id: "node/2", geometry: { type: "Point", coordinates: point(100) }, properties: { osmId: "node/2", parentWayIds: ["way/1"], log: true, other: true, widthMetres: 0.1 } };
+	assert.equal(api.analyse(route(), [way(1, undefined, { highway: "cycleway" }), node]).warnings.length, 0);
 });

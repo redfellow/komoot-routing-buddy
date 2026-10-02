@@ -141,9 +141,10 @@
 .krb-route__actions { display: flex; gap: 8px; }
 .krb-route__actions button, .krb-route__results button { border: 0; border-radius: 8px; padding: 9px 12px; background: #e9efeb; color: #17221c; font: inherit; cursor: pointer; }
 .krb-route__actions button:disabled { opacity: .5; cursor: wait; }
-.krb-route__results { list-style: none; padding: 0; margin: 12px 0 0; }
-.krb-route__results li { margin: 6px 0; }
-.krb-route__results button { width: 100%; text-align: left; }
+.krb-route__results { list-style: none; padding: 0; margin: 8px 0 0; }
+.krb-route__results li { margin: 3px 0; }
+.krb-route__results button { width: 100%; min-height: 30px; padding: 5px 10px; border-radius: 6px; text-align: left; line-height: 1.35; }
+@media (pointer: coarse) { .krb-route__results button { min-height: 40px; } }
 .krb-route button:focus-visible, .krb-route input:focus-visible, .krb-route select:focus-visible { outline: 2px solid #1c9cc5; outline-offset: 2px; }
 .krb-panel__route svg { display: block; }
 
