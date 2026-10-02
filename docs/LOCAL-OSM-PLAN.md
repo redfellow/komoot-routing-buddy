@@ -72,9 +72,9 @@ Acceptance: a reproducible command, documented prerequisites, validated sample/f
 
 Checkpoint: runnable local command, reproducible sample/full output, actual packaged-size measurement, and tests showing required features and matching data survive extraction.
 
-### 3. Add local storage and lookup
+### 3. Add local storage and lookup — reviewed and accepted
 
-Plan to present after bucket 2 approval: spatially indexed lookup and atomic snapshot replacement, with bounded memory usage and desktop benchmarks.
+Concrete plan: keep compressed spatial files in a separate IndexedDB database; validate and checkpoint each file during resumable import; publish a snapshot with one atomic metadata switch. Query overlapping spatial directory entries, stream-decompress records, bound compressed hot-cache and result budgets, and check exact coverage polygons. Test interruption/corruption and snapshot isolation. Benchmark actual desktop browser imports and cold/warm corridor lookups before connecting extension features in bucket 4.
 
 Checkpoint: cold/warm query measurements, storage and memory use, failed-update recovery and evidence toward the route-check speed target.
 
@@ -124,3 +124,9 @@ Final cleanup after the user accepts the feature as finished:
 - 2026-10-02: Investigation committed and pushed as `d2c8952`. Bucket 2 command, versioned spatial output, tests and usage documentation implemented. Full Finland: 151.12 MB payload + 0.37 MB manifest, 207.3 s preparation, 2.01 GB peak native RSS. See [LOCAL-OSM-DATA.md](LOCAL-OSM-DATA.md) and [LOCAL-OSM-PREPARATION-MEASUREMENTS.json](LOCAL-OSM-PREPARATION-MEASUREMENTS.json). No extension build or packaging performed. Bucket 2 changes await user review and commit approval; bucket 3 has not started.
 
 - 2026-10-02: User reviewed bucket 2 and approved carrying onward through the agreed commit/push checkpoint to bucket 3.
+
+- 2026-10-02: Bucket 2 committed and pushed as `7bd9c49`. Bucket 3 implementation started under the concrete plan above.
+
+- 2026-10-02: Bucket 3 implemented in standalone `local-osm.js`, without loading it in the extension yet. Compressed IndexedDB storage, resumable per-file import, atomic activation, exact conservative coverage and bounded lookups are covered by 11 new tests (82 relevant tests pass). Full-Finland imports and corridor lookups passed in installed Chrome, Firefox and Brave with disposable profiles. See [LOCAL-OSM-STORAGE.md](LOCAL-OSM-STORAGE.md) and its measurements. No extension build/package or bucket 3 commit performed. Await user review before committing and starting bucket 4. Real routed/live extension performance remains to validate; snapshot garbage collection belongs with the update lifecycle before unattended updates are enabled.
+
+- 2026-10-02: User explicitly approved bucket 3. Commit/push checkpoint accepted. Next: present the concrete bucket 4 integration plan, then connect local data to both overlays and trail checking while preserving uncovered/unusable-data fallback and current matching semantics.
