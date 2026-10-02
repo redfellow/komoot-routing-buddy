@@ -22,7 +22,7 @@ function fixture(load) {
 	const window = { innerWidth: 600, innerHeight: 800, postMessage(message) { messages.push(message); }, addEventListener(name, fn) { if (name === "message") listeners.push(fn); } };
 	const context = { window, console, AbortController, Date: { now: () => now }, location: { origin: "https://www.komoot.com" },
 		document: { createElement: element, documentElement: { append(node) { dialog = node; } } },
-		KrbBrowser: { storage: { sync: { async get() { return {}; }, async set() {} } }, runtime: { sendMessage: load } },
+		KrbBrowser: { storage: { sync: { async get() { return {}; }, async set() {} } }, runtime: { sendMessage(message) { return message.type === "KRB_CHECK_LOCAL_ROUTE" ? Promise.resolve({ data: null }) : load(message); } } },
 		MutationObserver: class { observe() {} },
 		setTimeout(fn, delay) { timers.set(++sequence, { fn, delay }); return sequence; }, clearTimeout(id) { timers.delete(id); }
 	};

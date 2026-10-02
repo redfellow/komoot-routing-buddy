@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, execFileSync } from "node:child_process";
-const [browser, snapshot] = process.argv.slice(2);
+const [browser, snapshot, mode] = process.argv.slice(2);
 const paths = { chrome: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", firefox: "/Applications/Firefox.app/Contents/MacOS/firefox", brave: "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" };
 if (!paths[browser] || !snapshot) throw new Error("Usage: node scripts/local-osm/benchmark.mjs chrome|firefox|brave /path/to/snapshot");
 const root = fileURLToPath(new URL("../../", import.meta.url)), data = resolve(snapshot);
@@ -32,7 +32,7 @@ const server = createServer(async function (req, res) {
 		if (req.url === "/manifest.json") path = join(data, "manifest.json");
 		else if (req.url.startsWith("/data/") && allowed.has(req.url.slice(6))) path = join(data, req.url.slice(6));
 		else if (["/local-osm.js", "/osm-cache.js", "/hazards.js", "/route-check.js"].includes(req.url)) path = join(root, req.url.slice(1));
-		else if (req.url === "/benchmark-worker.js") path = join(root, "scripts/local-osm/benchmark-worker.js");
+		else if (req.url === "/benchmark-worker.js") path = join(root, mode === "integration" ? "scripts/local-osm/integration-worker.js" : "scripts/local-osm/benchmark-worker.js");
 		else { res.writeHead(404); res.end(); return; }
 		res.setHeader("Content-Type", path.endsWith(".js") ? "text/javascript" : "application/octet-stream");
 		const stream = createReadStream(path); stream.on("error", function (error) { res.destroy(error); }); stream.pipe(res);

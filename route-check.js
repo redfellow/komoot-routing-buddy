@@ -220,15 +220,33 @@
 		}
 		return { warnings: groupWarnings(warnings, routeSamples), unknown, checkedDistance, distance: routeSamples.reduce((sum, s) => sum + s.length, 0) };
 	}
-	async function collect(route, load, { signal, progress = function () {}, checkpoint = {}, concurrency = 1 } = {}) {
+	async function collect(route, load, { signal, progress = function () {}, checkpoint = {}, concurrency = 1, localLoad } = {}) {
 		samples(route);
 		const boxes = areas(route), routeSignature = signature(route);
-		if (checkpoint.signature !== routeSignature) Object.assign(checkpoint, { signature: routeSignature, completed: 0, completedAreas: [], features: [], cached: 0, downloaded: 0 });
+		if (checkpoint.signature !== routeSignature) Object.assign(checkpoint, { signature: routeSignature, completed: 0, completedAreas: [], features: [], cached: 0, downloaded: 0, localSnapshotAt: null });
 		const done = new Set(checkpoint.completedAreas || Array.from({ length: checkpoint.completed }, (_, i) => i));
 		const reserved = new Set();
 		const features = new Map(checkpoint.features.map((feature) => [feature.id || feature.properties?.osmId, feature]));
 		let failure, running = 0;
 		function report() { progress({ completed: done.size, total: boxes.length, features: [...features.values()], cached: checkpoint.cached || 0, downloaded: checkpoint.downloaded || 0, running }); }
+		if (localLoad && !done.size) {
+			running = 1; report();
+			let response;
+			try { response = await localLoad(boxes); }
+			catch (error) {
+				signal?.throwIfAborted();
+				console.warn("Local route lookup unavailable; checking areas:", error.message);
+			}
+			signal?.throwIfAborted(); running = 0;
+			if (response?.data?.type === "FeatureCollection" && response.data.cacheSource === "local" && response.data.coveredAreas === boxes.length) {
+				checkpoint.features = response.data.features;
+				checkpoint.localSnapshotAt = response.data.snapshotAt;
+				checkpoint.completedAreas = boxes.map((box, i) => i);
+				checkpoint.completed = boxes.length; checkpoint.cached = boxes.length; checkpoint.downloaded = 0;
+				progress({ completed: boxes.length, total: boxes.length, features: checkpoint.features, cached: boxes.length, downloaded: 0, running: 0 });
+				return checkpoint.features;
+			}
+		}
 		async function worker() {
 			while (!failure) {
 				signal?.throwIfAborted();
@@ -249,7 +267,7 @@
 						features.set(id, previous && feature.geometry.type === "Point" ? { ...feature, properties: { ...feature.properties, parentWayIds: [...new Set([...(previous.properties.parentWayIds || []), ...(feature.properties.parentWayIds || [])])] } } : feature);
 					}
 					for (const index of batch.slice(0, covered)) done.add(index);
-					const counter = ["memory", "disk", "cache"].includes(response.data.cacheSource) ? "cached" : "downloaded";
+					const counter = ["memory", "disk", "cache", "local"].includes(response.data.cacheSource) ? "cached" : "downloaded";
 					checkpoint[counter] = (checkpoint[counter] || 0) + covered;
 					checkpoint.completed = done.size;
 					checkpoint.completedAreas = [...done];
@@ -274,14 +292,14 @@
 			signal?.addEventListener("abort", abort, { once: true });
 		});
 	}
-	async function collectWithRetry(route, load, { signal, checkpoint = {}, progress = function () {}, waiting = function () {}, now = Date.now, wait = waitForRetry, concurrency = 1 } = {}) {
+	async function collectWithRetry(route, load, { signal, checkpoint = {}, progress = function () {}, waiting = function () {}, now = Date.now, wait = waitForRetry, concurrency = 1, localLoad } = {}) {
 		samples(route);
 		areas(route);
 		let stalledSince, completed = checkpoint.completed || 0;
 		while (true) {
 			signal?.throwIfAborted();
 			try {
-				return await collect(route, load, { signal, checkpoint, concurrency, progress: function (value) {
+				return await collect(route, load, { signal, checkpoint, concurrency, localLoad, progress: function (value) {
 					if (value.completed > completed) stalledSince = undefined;
 					completed = value.completed;
 					progress(value);

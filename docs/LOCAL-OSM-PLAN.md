@@ -28,7 +28,7 @@ Target: check a previously unvisited 50–100 km route within covered Finland in
 
 ## Existing behaviour to preserve
 
-The checker uses Komoot route geometry and OSM matching; inspected geometry does not expose Komoot summary way types or shared OSM IDs. Current eligibility is unpaved path/track classes with an MTB scale, excluding cycleways, roads/streets and paved paths. Unpaved paths without an MTB scale and paths with unknown surfaces are reported separately. Keep needed competing geometry and obstacle membership when designing the extract. Any change to matching, eligibility, warnings or unknown-data semantics requires explicit user review.
+The checker uses Komoot route geometry and OSM matching; inspected geometry does not expose Komoot summary way types or shared OSM IDs. Current eligibility is unpaved path/track classes with an MTB scale, excluding cycleways, roads/streets and paved paths. MTB-rated path/track classes without a surface tag are assumed unpaved and assessed (user-approved correction on 2026-10-02). Unpaved paths without an MTB scale and remaining paths with unknown surfaces are reported separately. Keep needed competing geometry and obstacle membership when designing the extract. Any change to matching, eligibility, warnings or unknown-data semantics requires explicit user review.
 
 Current worktree contains earlier trail-classification, wording, icon and compact-layout changes. These are separate from this project; do not discard or silently fold them into an investigation commit.
 
@@ -78,9 +78,9 @@ Concrete plan: keep compressed spatial files in a separate IndexedDB database; v
 
 Checkpoint: cold/warm query measurements, storage and memory use, failed-update recovery and evidence toward the route-check speed target.
 
-### 4. Connect extension features
+### 4. Connect extension features — reviewed and accepted
 
-Plan to present after bucket 3 approval: use local data for map overlays and trail checks; use API fallback for missing coverage or unusable data, without querying for empty-but-covered results.
+Concrete plan presented before implementation: load the snapshot store in both background entry points; read local coverage before API cache/network for overlays and area checks; add a whole-route local lookup to avoid repeated file decoding; retain existing converters and eligibility rules; expose an extension-owned worker import page for prepared folders. Validate authoritative empty coverage, fallback and equivalent warning results; test actual desktop paths without building or packaging.
 
 Checkpoint: fixture comparisons and live desktop verification of matching, warnings, unknowns, coverage boundaries and route performance.
 
@@ -130,3 +130,11 @@ Final cleanup after the user accepts the feature as finished:
 - 2026-10-02: Bucket 3 implemented in standalone `local-osm.js`, without loading it in the extension yet. Compressed IndexedDB storage, resumable per-file import, atomic activation, exact conservative coverage and bounded lookups are covered by 11 new tests (82 relevant tests pass). Full-Finland imports and corridor lookups passed in installed Chrome, Firefox and Brave with disposable profiles. See [LOCAL-OSM-STORAGE.md](LOCAL-OSM-STORAGE.md) and its measurements. No extension build/package or bucket 3 commit performed. Await user review before committing and starting bucket 4. Real routed/live extension performance remains to validate; snapshot garbage collection belongs with the update lifecycle before unattended updates are enabled.
 
 - 2026-10-02: User explicitly approved bucket 3. Commit/push checkpoint accepted. Next: present the concrete bucket 4 integration plan, then connect local data to both overlays and trail checking while preserving uncovered/unusable-data fallback and current matching semantics.
+
+- 2026-10-02: Bucket 4 implemented and validated. Local snapshot import completed in the user's existing Brave extension (source checkout). The real 77.3 km test route finished by the first UI observation (~1.7 s tool round trip) and explicitly displayed the local snapshot date. Satellite-map hazard icons/width labels were visually verified on the singletrack fixture. 160 non-build tests pass. Isolated Chrome/Firefox production acquisition/collection tests returned zero API calls for synthetic 50/100 km corridors. See [LOCAL-OSM-INTEGRATION.md](LOCAL-OSM-INTEGRATION.md). No build/package or commit performed; await bucket 4 review before committing or beginning bucket 5. Earlier unrelated edits remain in the worktree and must be staged separately.
+
+- 2026-10-02: Bucket 4 follow-up: user found S1 sections not warned at maximum S0. Captured the edited test route locally and reproduced the result against the same snapshot. Matching succeeds for ~255 m S1 and ~592 m S2, but missing surface tags suppress checks under the earlier eligibility rule. Proposed checking known attributes of rated paths while retaining unknown-surface reporting; explicit confirmation requested because this changes the agreed eligibility semantics. No classification change applied yet. See integration report follow-up.
+
+- 2026-10-02: User explicitly confirmed maximum S0 and approved treating MTB-rated paths with absent surface as unpaved. Implemented the shared eligibility correction for difficulty, width and parent-way obstacle checks. Explicitly paved paths and road/cycleway classes remain excluded; unrated missing surfaces and explicit unknown/mixed surfaces remain unknown. Replaying the captured 3.94 km route now assesses 892 m and reports S1/S2 difficulty warnings. No build or commit.
+
+- 2026-10-02: User approved bucket 4, requested its commit plus the missing-surface fix, and authorized starting bucket 5. Earlier trail classification/UI edits are preserved in a separate commit. Bucket 5 starts with a bounded browser PBF feasibility prototype, update lifecycle/cleanup and route-only refresh controls; it must not silently replace the approved public-provider update direction.

@@ -1,0 +1,155 @@
+{
+  "method": "Production local-first acquisition and route collector in isolated desktop browser workers. Full Finland imported from localhost; fetch replaced with an error/counting function after import. Synthetic corridors, not real rides.",
+  "browsers": {
+    "chrome": {
+      "result": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "runs": [
+          {
+            "label": "first-query",
+            "distanceKm": 50.40478492970785,
+            "collectionMs": 308.60000002384186,
+            "totalMs": 383.19999998807907,
+            "features": 9201,
+            "warnings": 4,
+            "checkedKm": 0.4699513770475197,
+            "completed": 52,
+            "cached": 52,
+            "downloaded": 0
+          },
+          {
+            "label": "repeat-query",
+            "distanceKm": 50.40478492970785,
+            "collectionMs": 284.4000000357628,
+            "totalMs": 352.5,
+            "features": 9201,
+            "warnings": 4,
+            "checkedKm": 0.4699513770475197,
+            "completed": 52,
+            "cached": 52,
+            "downloaded": 0
+          },
+          {
+            "label": "first-query",
+            "distanceKm": 100.80956985943504,
+            "collectionMs": 328.80000001192093,
+            "totalMs": 417.10000002384186,
+            "features": 9372,
+            "warnings": 4,
+            "checkedKm": 0.48999790924629993,
+            "completed": 102,
+            "cached": 102,
+            "downloaded": 0
+          },
+          {
+            "label": "repeat-query",
+            "distanceKm": 100.80956985943504,
+            "collectionMs": 318.19999998807907,
+            "totalMs": 401.30000001192093,
+            "features": 9372,
+            "warnings": 4,
+            "checkedKm": 0.48999790924629993,
+            "completed": 102,
+            "cached": 102,
+            "downloaded": 0
+          }
+        ],
+        "networkCalls": 0,
+        "map": {
+          "cacheSource": "local",
+          "features": 0,
+          "counts": {
+            "total": 0,
+            "mud": 0,
+            "vegetation": 0,
+            "narrow": 0,
+            "other": 0
+          }
+        }
+      },
+      "peakProcessTreeRssBytes": 1655914496
+    },
+    "firefox": {
+      "result": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:157.0) Gecko/20100101 Firefox/157.0",
+        "runs": [
+          {
+            "label": "first-query",
+            "distanceKm": 50.40478492970785,
+            "collectionMs": 315,
+            "totalMs": 400,
+            "features": 9201,
+            "warnings": 4,
+            "checkedKm": 0.4699513770475197,
+            "completed": 52,
+            "cached": 52,
+            "downloaded": 0
+          },
+          {
+            "label": "repeat-query",
+            "distanceKm": 50.40478492970785,
+            "collectionMs": 284,
+            "totalMs": 383,
+            "features": 9201,
+            "warnings": 4,
+            "checkedKm": 0.4699513770475197,
+            "completed": 52,
+            "cached": 52,
+            "downloaded": 0
+          },
+          {
+            "label": "first-query",
+            "distanceKm": 100.80956985943504,
+            "collectionMs": 374,
+            "totalMs": 499,
+            "features": 9372,
+            "warnings": 4,
+            "checkedKm": 0.48999790924629993,
+            "completed": 102,
+            "cached": 102,
+            "downloaded": 0
+          },
+          {
+            "label": "repeat-query",
+            "distanceKm": 100.80956985943504,
+            "collectionMs": 360,
+            "totalMs": 485,
+            "features": 9372,
+            "warnings": 4,
+            "checkedKm": 0.48999790924629993,
+            "completed": 102,
+            "cached": 102,
+            "downloaded": 0
+          }
+        ],
+        "networkCalls": 0,
+        "map": {
+          "cacheSource": "local",
+          "features": 0,
+          "counts": {
+            "total": 0,
+            "mud": 0,
+            "vegetation": 0,
+            "narrow": 0,
+            "other": 0
+          }
+        }
+      },
+      "peakProcessTreeRssBytes": 2160689152
+    }
+  },
+  "liveBrave": {
+    "route": "https://www.komoot.com/tour/3315077538/zoom",
+    "displayedKm": 77.3,
+    "snapshot": "2026-09-30",
+    "result": "No issues found on matched trails according to Komoot & OSM data.",
+    "unknownSurfaceKm": 0.25,
+    "unratedUnpavedKm": 0.05,
+    "missingWidthKm": 0.17,
+    "observation": "Completed by the first UI observation after clicking (tool round trip 1.71 seconds on repeat). This is an observational bound, not a precise internal timer or cold-OS-cache benchmark.",
+    "mapRoute": "https://www.komoot.com/tour/3287158188/zoom",
+    "mapHazards": 360,
+    "mapFeatures": 494,
+    "mapVerification": "Screenshot visually confirms hazard icons and width labels on satellite map. Route checker identifies local snapshot but reports no eligible MTB-rated unpaved trail sections under existing eligibility rules; 0.59 km unknown surface."
+  }
+}

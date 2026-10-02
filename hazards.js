@@ -23,6 +23,7 @@
 		});
 	}
 	const cacheStore = globalThis.KrbOsmCache.create();
+	const localStore = globalThis.KrbLocalOsm?.create();
 	let cache;
 	const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 	function displayData(data) {
@@ -211,9 +212,28 @@
 			}
 		}
 	}
+	async function localData(boxes, forRoute) {
+		for (const box of boxes) boundsKey(box);
+		if (!localStore) return undefined;
+		try {
+			const result = await localStore.query(boxes.map((b) => [b[1], b[0], b[3], b[2]]));
+			if (!result.available || !result.covered.every(Boolean)) return undefined;
+			return { ...convert(result.elements, forRoute), cacheSource: "local", snapshotAt: result.snapshotAt, coveredAreas: boxes.length };
+		}
+		catch (error) {
+			console.warn("Local OSM lookup unavailable; using API cache/fallback:", error.message);
+			return undefined;
+		}
+	}
+	async function loadLocalRoute(boxes) {
+		if (!Array.isArray(boxes) || !boxes.length || boxes.length > 10000) throw new Error("Invalid route areas");
+		return localData(boxes, true);
+	}
 	// A failed combined area is retried as individual cells, not the same large query.
 	const singleRouteAreas = new Set();
 	async function loadRoute(bounds, following = []) {
+		const local = await localData([bounds, ...(Array.isArray(following) ? following.slice(0, 3) : [])], true) || await localData([bounds], true);
+		if (local) return local;
 		const cached = await load(bounds, false, true, true);
 		if (cached) return { ...cached, coveredAreas: 1 };
 		const key = boundsKey(bounds);
@@ -244,6 +264,10 @@
 	async function load(bounds, prefetch = false, forRoute = false, cacheOnly = false) {
 		if (clearing) await clearing;
 		boundsKey(bounds);
+		if (!cacheOnly) {
+			const local = await localData([bounds], forRoute);
+			if (local) return local;
+		}
 		await readCache();
 		for (const hit of [...cache.values()].reverse()) {
 			if ((!forRoute || hit.routeComplete && hit.trailSchema === 1) && Date.now() - hit.time < CACHE_TTL && contains(hit.bounds, bounds)) {
@@ -369,5 +393,5 @@
 			throw error;
 		}
 	}
-	globalThis.KrbHazards = { queryFor, unpack, load, loadRoute, clearCache, cacheStats: cacheStore.stats, convert, convertRoute, boundsKey, expandedBounds, identifyRequests, countFeatures };
+	globalThis.KrbHazards = { queryFor, unpack, load, loadRoute, loadLocalRoute, clearCache, cacheStats: cacheStore.stats, convert, convertRoute, boundsKey, expandedBounds, identifyRequests, countFeatures };
 })();

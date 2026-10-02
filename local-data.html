@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Local Finland data — Komoot Routing Buddy</title>
+	<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+	<main>
+		<h1>Local Finland data</h1>
+		<p>Import a prepared Finland snapshot for hazard overlays and trail checks. Select the folder containing manifest.json and its compressed data files.</p>
+		<p>The current snapshot stays available during import. Keep this tab open until import finishes. After interruption, select the same folder to resume.</p>
+		<label>Prepared snapshot folder <input id="snapshot" type="file" webkitdirectory multiple></label>
+		<button id="cancel" type="button" hidden>Cancel import</button>
+		<progress id="progress" max="1" value="0" hidden></progress>
+		<p id="status" role="status" aria-live="polite">Reading local data status…</p>
+		<p id="active"></p>
+		<p>Areas without usable local coverage still use the existing online API. Clearing the OSM API cache does not remove this snapshot.</p>
+		<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors · ODbL</a>
+	</main>
+	<script src="local-osm.js"></script>
+	<script src="local-data.js"></script>
+</body>
+</html>

@@ -41,3 +41,12 @@ globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender, s
 		.catch((error) => sendResponse({ error: error.message, retryMs: error.retryMs, status: error.status, permanent: error.permanent }));
 	return true;
 });
+
+// Fast path: one snapshot lookup for all route areas; no network on this message.
+globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+	if (message?.type !== "KRB_CHECK_LOCAL_ROUTE" || sender.id !== globalThis.KrbBrowser.runtime.id || !sender.tab) return;
+	if (!/^https:\/\/www\.komoot\.com\/(?:tour\/[^/]+\/(?:zoom|edit)|plan(?:\/[^?]*)?)(?:\?.*)?$/.test(sender.url || "")) return;
+	globalThis.KrbHazards.loadLocalRoute(message.bounds).then((data) => sendResponse({ data: data || null }))
+		.catch((error) => sendResponse({ error: error.message }));
+	return true;
+});

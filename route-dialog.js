@@ -64,6 +64,7 @@
 			button.addEventListener("click", function () { post({ type: "KRB_ROUTE_FOCUS", routeKey, point: warning.point, coordinates: warning.coordinates }); });
 			item.append(button); field("results").append(item);
 		}
+		field("source").textContent = checkpoint.localSnapshotAt ? `Local Finland snapshot: ${checkpoint.localSnapshotAt.slice(0, 10)}` : "";
 		const missing = result.unknown;
 		field("unknown").textContent = [missing.surface > 1 ? `${(missing.surface / 1000).toFixed(2)}km of paths has an unknown surface (not assessed)` : "", missing.rating > 1 ? `${(missing.rating / 1000).toFixed(2)}km of unpaved paths has no MTB scale (unknown)` : "", missing.width > 1 ? `${(missing.width / 1000).toFixed(2)}km of MTB-rated unpaved trails has no width data` : ""].filter(Boolean).join(" · ");
 		field("status").textContent = incomplete ? "Trail check incomplete" : result.warnings.length ? `${result.warnings.length} trail warning${result.warnings.length === 1 ? "" : "s"}` : result.checkedDistance > 0 ? checker.SUCCESS : "No MTB-rated unpaved trails were identified on this route.";
@@ -72,6 +73,7 @@
 	async function check(snapshot, key, controller) {
 		try {
 			if (!controller.resume || routeKey !== key) checkpoint = {};
+			field("source").textContent = "";
 			route = snapshot; routeKey = key;
 			checker.lines(route);
 			collected = checkpoint.features || [];
@@ -79,7 +81,7 @@
 			controller.signal.throwIfAborted();
 			collected = await checker.collectWithRetry(route, function (bounds, following) {
 				return globalThis.KrbBrowser.runtime.sendMessage({ type: "KRB_CHECK_AREA", bounds, following });
-			}, { signal: controller.signal, checkpoint, concurrency: 2, waiting: function (value) {
+			}, { signal: controller.signal, checkpoint, concurrency: 2, localLoad: (bounds) => globalThis.KrbBrowser.runtime.sendMessage({ type: "KRB_CHECK_LOCAL_ROUTE", bounds }), waiting: function (value) {
 				showRetry(value);
 				position();
 			}, progress: function (progress) {
@@ -129,7 +131,7 @@
 			dialog = document.createElement("section");
 			dialog.id = "krb-route-dialog"; dialog.className = "krb-route";
 			dialog.setAttribute("role", "dialog"); dialog.setAttribute("aria-labelledby", "krb-route-title");
-			dialog.innerHTML = `<button type="button" class="krb-settings__close" data-route="close" aria-label="Close trail checker">×</button><h2 id="krb-route-title">Check trails along route</h2><p class="krb-route__help">Checks unpaved trails with an MTB scale. Roads, streets and cycleways are excluded. Unpaved paths without an MTB scale are listed as unknown. Unmatched sections and paths without a known unpaved surface are not assessed.</p><fieldset data-route="preferences"><label>Maximum trail level<select data-route="level">${[0, 1, 2, 3, 4, 5].map((n) => `<option value="S${n}">S${n}</option>`).join("")}</select></label><label>Minimum trail width <output data-route="width-value">0.4m</output><input data-route="width" type="range" min="0.1" max="1" step="0.1" value="0.4"></label><label class="krb-route__checkbox"><input data-route="hazards" type="checkbox"> Allow hazards</label><p class="krb-route__help">Allow hazards ignores mud, vegetation and obstacles. Difficulty and minimum width still apply.</p></fieldset><div class="krb-route__actions"><button type="button" data-route="start">Check trails</button><button type="button" data-route="cancel" hidden>Cancel</button></div><p data-route="status" role="status" aria-live="polite">Check MTB-rated unpaved trails along your Komoot route using OSM data.</p><div class="krb-route__progress" data-route="progress" hidden><div class="krb-route__bar" data-route="bar" role="progressbar" aria-label="Trail data areas checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="krb-route__fill" data-route="fill"></span></div><p class="krb-route__help" data-route="counts"></p><p class="krb-route__help" data-route="activity"></p></div><p class="krb-route__help" data-route="unknown"></p><ol data-route="results" class="krb-route__results"></ol><a class="krb-route__help" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a>`;
+			dialog.innerHTML = `<button type="button" class="krb-settings__close" data-route="close" aria-label="Close trail checker">×</button><h2 id="krb-route-title">Check trails along route</h2><p class="krb-route__help">Checks unpaved trails with an MTB scale. Roads, streets and cycleways are excluded. Unpaved paths without an MTB scale are listed as unknown. Unmatched sections and paths without a known unpaved surface are not assessed.</p><fieldset data-route="preferences"><label>Maximum trail level<select data-route="level">${[0, 1, 2, 3, 4, 5].map((n) => `<option value="S${n}">S${n}</option>`).join("")}</select></label><label>Minimum trail width <output data-route="width-value">0.4m</output><input data-route="width" type="range" min="0.1" max="1" step="0.1" value="0.4"></label><label class="krb-route__checkbox"><input data-route="hazards" type="checkbox"> Allow hazards</label><p class="krb-route__help">Allow hazards ignores mud, vegetation and obstacles. Difficulty and minimum width still apply.</p></fieldset><div class="krb-route__actions"><button type="button" data-route="start">Check trails</button><button type="button" data-route="cancel" hidden>Cancel</button></div><p data-route="status" role="status" aria-live="polite">Check MTB-rated unpaved trails along your Komoot route using OSM data.</p><div class="krb-route__progress" data-route="progress" hidden><div class="krb-route__bar" data-route="bar" role="progressbar" aria-label="Trail data areas checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="krb-route__fill" data-route="fill"></span></div><p class="krb-route__help" data-route="counts"></p><p class="krb-route__help" data-route="activity"></p></div><p class="krb-route__help" data-route="unknown"></p><p class="krb-route__help" data-route="source"></p><ol data-route="results" class="krb-route__results"></ol><a class="krb-route__help" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a>`;
 			document.documentElement.append(dialog);
 			field("level").value = preferences.maximumLevel;
 			field("width").value = String(preferences.minimumWidth);

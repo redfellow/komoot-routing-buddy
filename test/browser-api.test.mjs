@@ -46,14 +46,14 @@ test("adapter loads before API consumers in each extension entry point", functio
 	assert.ok(popup.indexOf('src="browser-api.js"') < popup.indexOf('src="settings.js"'));
 	const loaded = [];
 	runInNewContext(read(manifest.background.service_worker), { importScripts(...files) { loaded.push(...files); } });
-	assert.deepEqual(loaded, ["browser-api.js", "osm-cache.js", "hazards.js", "background.js"]);
+	assert.deepEqual(loaded, ["browser-api.js", "osm-cache.js", "local-osm.js", "hazards.js", "background.js"]);
 });
 
 test("explicit route checks validate sender and work independently of hazard display", async function () {
 	const listeners = [], calls = [];
 	const context = { KrbBrowser: { runtime: { id: "krb", onMessage: { addListener(fn) { listeners.push(fn); } } } }, KrbHazards: { async loadRoute(bounds, following) { calls.push({ bounds, following }); return { type: "FeatureCollection", features: [] }; } } };
 	runInNewContext(read("background.js"), context);
-	const listener = listeners.at(-1), message = { type: "KRB_CHECK_AREA", bounds: [61, 23, 61.001, 23.001], following: [[61, 23.001, 61.001, 23.002]] };
+	const listener = listeners.find((fn) => fn.toString().includes('"KRB_CHECK_AREA"')), message = { type: "KRB_CHECK_AREA", bounds: [61, 23, 61.001, 23.001], following: [[61, 23.001, 61.001, 23.002]] };
 	assert.equal(listener(message, { id: "other", tab: {}, url: "https://www.komoot.com/plan" }, () => {}), undefined);
 	assert.equal(listener(message, { id: "krb", tab: {}, url: "https://example.com/plan" }, () => {}), undefined);
 	let response;
@@ -62,4 +62,17 @@ test("explicit route checks validate sender and work independently of hazard dis
 	assert.equal(calls.length, 1);
 	assert.equal(calls[0].following, message.following);
 	assert.equal(response.data.type, "FeatureCollection");
+});
+
+test("whole-route local lookup is restricted to this extension's Komoot tabs", async function () {
+	const listeners = [], calls = [];
+	runInNewContext(read("background.js"), { KrbBrowser: { runtime: { id: "krb", onMessage: { addListener(fn) { listeners.push(fn); } } } }, KrbHazards: { async loadLocalRoute(bounds) { calls.push(bounds); return undefined; } } });
+	const listener = listeners.find((fn) => fn.toString().includes('"KRB_CHECK_LOCAL_ROUTE"'));
+	const message = { type: "KRB_CHECK_LOCAL_ROUTE", bounds: [[61, 24, 61.01, 24.01]] };
+	assert.equal(listener(message, { id: "other", tab: {}, url: "https://www.komoot.com/plan" }, () => {}), undefined);
+	assert.equal(listener(message, { id: "krb", tab: {}, url: "https://example.com/" }, () => {}), undefined);
+	let response;
+	assert.equal(listener(message, { id: "krb", tab: {}, url: "https://www.komoot.com/tour/1/zoom" }, (value) => { response = value; }), true);
+	await new Promise((resolve) => setImmediate(resolve));
+	assert.equal(calls.length, 1); assert.equal(response.data, null);
 });
