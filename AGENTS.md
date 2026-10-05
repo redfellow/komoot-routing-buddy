@@ -42,9 +42,3 @@
 - Rebase the main branch so that it contains new code from development branch
 - Increment the version number in manifest.json by 0.1 and
 - Finally then do a git tag, and only then run the build scripts
-
-## Active project: local Finland OSM data
-
-Before working on local OSM data, read [docs/LOCAL-OSM-PLAN.md](docs/LOCAL-OSM-PLAN.md). It records the agreed scope, priorities, six implementation/investigation buckets and current checkpoint. Work one bucket at a time: present its plan, produce reviewable output, then wait for the user's review and approval before committing and moving on. Explicitly confirm material changes to the agreed decisions and update the checkpoint log when progress is accepted.
-
-Final feature-completion step: remove this active-project section from AGENTS.md after the user accepts the feature as finished; mark the plan completed and retain it as history unless asked otherwise.

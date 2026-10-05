@@ -40,5 +40,32 @@
     "hazardNodes": 28006,
     "payloadBytes": 151123317,
     "latestReleaseCandidate": false
+  },
+  "packagedAcceptance": {
+    "checkedAt": "2026-10-05",
+    "snapshotAt": "2026-10-04T20:20:21Z",
+    "ways": 1150527,
+    "hazardNodes": 28058,
+    "nodeTests": 194,
+    "nativeTests": 7,
+    "firefoxLintFindings": 0,
+    "chromeInitialInstall": "Bundled snapshot activated; background import tab closed",
+    "chromeTrailCheck": "3 local warnings at S1; 4 at S0, including expected S1 warning",
+    "firefoxRuntime": "Skipped at user request",
+    "mobile": "Not validated",
+    "artifacts": [
+      {
+        "browser": "chrome",
+        "bytes": 149657135,
+        "sha256": "b0b30e21a1831b265c6b3d9a42fd9f585c5e707aa6529604bd0b2d143b8ffb18",
+        "crcVerified": true
+      },
+      {
+        "browser": "firefox",
+        "bytes": 149657043,
+        "sha256": "a8ec6652aed623182001469baebcd335444216491da62a9a9d25551f23812fe6",
+        "crcVerified": true
+      }
+    ]
   }
 }

@@ -1,6 +1,6 @@
 # Local OSM data for Komoot Routing Buddy
 
-Agreed with the user on 2026-10-02. This is the active project plan, not a completed feasibility assessment.
+Agreed with the user on 2026-10-02. All six buckets are completed and accepted. Retained as project history; Firefox runtime and mobile acceptance remain deferred.
 
 ## Goal and priorities
 
@@ -90,11 +90,11 @@ Concrete plan: prototype a streaming browser PBF decoder with disk-backed node c
 
 Checkpoint: successful/failed/interrupted updates, old-snapshot continuity, manual refresh scope and interaction between fresh route data and the regional snapshot.
 
-### 6. Integrate releases and validate — implementation reviewed and accepted; packaged acceptance pending
+### 6. Integrate releases and validate — completed and accepted
 
-Concrete plan: validate snapshot schema, geometry, membership, checksums, provenance and source age; add a release-data command that prepares the latest dated public extract and publishes an atomic local pointer only after validation; require that snapshot in packaging and copy its prepared files plus ODbL attribution into both browser outputs. Add resumable automatic import from the bundled snapshot on install/update using the existing background-tab worker. Test integrity/freshness/initial-import gates with small fixtures without running build/package commands; document desktop acceptance status and assess mobile resources/API/distribution constraints. User confirmed the latest provider extract with a maximum source age of seven days (168 hours). Firefox validation remains deferred as requested; packaged acceptance needs a separately authorized build.
+Concrete plan: validate snapshot schema, geometry, membership, checksums, provenance and source age; add a release-data command that prepares the latest dated public extract and publishes an atomic local pointer only after validation; require that snapshot in packaging and copy its prepared files plus ODbL attribution into both browser outputs. Add resumable automatic import from the bundled snapshot on install/update using the existing background-tab worker. Test integrity/freshness/initial-import gates with small fixtures without running build/package commands; document desktop acceptance status and assess mobile resources/API/distribution constraints. User confirmed the latest provider extract with a maximum source age of seven days (168 hours). Firefox runtime validation remains deferred as requested; the final authorized package and static lint checks passed.
 
-Checkpoint: release-gate tests, desktop acceptance results and mobile assessment. Running an actual build/release still requires explicit user instruction.
+Checkpoint completed: release-gate tests, packaged Chrome acceptance and mobile assessment. Future build/release commands still require explicit user instruction.
 
 Final cleanup after the user accepts the feature as finished:
 - Mark this plan completed and record the final outcome and any approved deferred work.
@@ -154,3 +154,5 @@ Final cleanup after the user accepts the feature as finished:
 - 2026-10-05: Bucket 6 implementation ready for review. Added latest-provider/seven-day integrity gates, pinned-source preparation and atomic release-data selection; package flow includes validated Finland files/ODbL notice in both browser outputs, initial background-tab import, and source/build bundle markers. Full existing Finland data passed the new validator; the actual bundle loader imported it in a disposable Chrome worker in 8.01 s with zero provider requests. 191 non-build Node tests and seven native preparation tests pass. See [LOCAL-OSM-RELEASES.md](LOCAL-OSM-RELEASES.md). No build/package/lint/signing/tag/version change or bucket 6 commit. Actual ZIP sizes and packaged initial install remain unverified, Firefox deferred, mobile assessed but not supported. Await review/build instructions; final feature acceptance and AGENTS.md cleanup remain outstanding.
 
 - 2026-10-05: User reviewed and approved bucket 6 implementation and requested continuation. Commit/push checkpoint authorized. Actual package/build and packaged-browser acceptance still require an explicit build instruction under AGENTS.md; Firefox remains deferred. Retain the active-project reference until final feature acceptance.
+
+- 2026-10-05: User approved remaining bucket 6 acceptance. Guarded packaging passed against the latest October 4 extract. Both browser ZIPs contain full Finland; Chrome unpacked-package installation automatically imported 1,150,527 ways and closed its import tab. The public 3.94 km fixture returned two S2 warnings and Fallen tree from the local October 4 snapshot; clicking the warning centered the map, with width labels, log and narrow icons visible. Firefox static lint passed with zero findings; Firefox runtime remains skipped as requested. Final resume/lint fixes tested and packaged. No version bump, tag, signing or publication. Active-project reference removed from AGENTS.md; all buckets completed.

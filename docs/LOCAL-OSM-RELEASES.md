@@ -1,6 +1,6 @@
 # Local Finland release integration — bucket 6
 
-Bucket 5 was accepted and pushed as `d8f5203`. The user reviewed and accepted bucket 6 implementation on 2026-10-05 and authorized its commit/push checkpoint. Packaged acceptance remains pending. **No extension build, package, version bump, tag, signing submission or release was performed.** Firefox validation remains deferred at the user's request.
+All six buckets were reviewed and accepted. On 2026-10-05 the authorized guarded package workflow and packaged Chrome acceptance completed. Firefox static lint passed; Firefox runtime testing remains skipped as requested. No version bump, tag, signing submission or publication was performed.
 
 ## Release-data contract
 
@@ -36,9 +36,9 @@ npm run package
 
 Packaging runs native preparation tests, fresh data preparation, regression tests, the release gate, both browser builds, validation of the copied snapshots, Firefox linting and ZIP generation. Both outputs contain `data/finland/manifest.json`, compressed spatial files and `LICENSE.txt`. Country data is readable only from the extension origin; it is not added to web-accessible resources.
 
-ZIPs are staged, checked and published directly to `artifacts/` with `chrome--` / `firefox--` prefixes. No artifact browser subfolders are introduced. Firefox candidates exceeding 200 MB stop before publication: Mozilla's signing submission limit applies to its self-distribution workflow too. Current measured data payload is about 151 MB, leaving headroom; actual ZIP size is still unverified. See [Mozilla submission/self-distribution documentation](https://www.extensionworkshop.com/documentation/publish/submitting-an-add-on/).
+ZIPs are staged, checked and published directly to `artifacts/` with `chrome--` / `firefox--` prefixes. No artifact browser subfolders are introduced. Firefox candidates exceeding 200 MB stop before publication: Mozilla's signing submission limit applies to its self-distribution workflow too. Current measured data payload is about 151 MB, leaving headroom; actual ZIPs are about 150 MB each. See [Mozilla submission/self-distribution documentation](https://www.extensionworkshop.com/documentation/publish/submitting-an-add-on/).
 
-`npm run build` remains a code-only developer build. It is not a release/package path and does not bypass the data gate in `npm run package`. Runtime-copy definitions and build-test expectations were updated; build tests were not executed in this bucket.
+`npm run build` remains a code-only developer build. It is not a release/package path and does not bypass the data gate in `npm run package`. Runtime-copy definitions and build-test expectations were updated; build tests passed during final authorized packaging.
 
 ## Initial installation
 
@@ -54,8 +54,8 @@ Successful import notifies open maps and invalidates stale checker results. The 
 - The actual bundle loader imported that full snapshot in a disposable Chrome worker in **8.01 seconds**, returned covered query data, made **zero provider requests**, and skipped reimport with one metadata read. This serves existing prepared files locally; it does not validate a generated ZIP or unpacked packaged install.
 - Peak sampled entire disposable browser RSS was **1.64 GB**, and installed IndexedDB use **152.0 MB**.
 - Deterministic tests cover stale/nonlatest/corrupt data, pinned-manifest changes, cutoff boundaries, missing/mismatched hazard membership, unchanged selection on failure, bundled import without provider access, failed and resumed initial imports, and installation despite weekly-download opt-out.
-- **191 non-build Node tests pass.** Seven pinned-native preparation tests pass, including the new dated-source CLI test.
-- Actual build tests, lint/signing, ZIP sizes and packaged desktop acceptance remain pending explicit authorization. Firefox checks were skipped as requested.
+- **194 Node tests pass, including the build test and two import UI regressions.** Seven pinned-native preparation tests pass, including the new dated-source CLI test.
+- Guarded packaging passed, including build tests and Firefox lint with zero errors, warnings or notices. Signing/publication was not requested. Firefox runtime testing was skipped as requested.
 
 ## Mobile feasibility assessment
 
@@ -67,6 +67,12 @@ The prepared ~151 MB bundle/local lookups are the promising part. Weekly raw-cou
 
 Before marking a mobile platform supported: choose actual target browser/device; verify sideload/signing, IndexedDB/permissions, worker/Web Locks/CompressionStream support, background-tab lifecycle, offline overlays/checks, installation/update time, disk/RAM and touch UI. Any switch to regional downloads, a separate data-download distribution or disabling weekly rebuilds on mobile needs explicit user agreement. Full-Finland coverage/defaults remain unchanged.
 
-## Remaining acceptance
+## Packaged desktop acceptance — 2026-10-05
 
-Bucket 6 code can be reviewed before any build. When separately authorized, run the guarded package workflow, inspect actual ZIP sizes and initial installation, then complete the desired desktop browser checks. After the user accepts the feature as finished, mark the plan completed and remove its active-project section from AGENTS.md. That final cleanup has not happened yet.
+Both version 1.4.0 ZIPs contain the October 4, 20:20:21 UTC Finland snapshot: **1,150,527 ways and 28,058 hazard nodes**, 1,178 compressed spatial files, manifest and ODbL notice. Both ZIP CRC checks passed. Artifact sizes are approximately 149.7 MB, safely below the Firefox signing submission limit.
+
+The actual Chrome ZIP was extracted and installed as an unpacked extension in the existing Chrome profile. Its automatic background import completed and closed its tab; the data screen confirmed the October 4 snapshot and 151 MB installed data. On the public test route `/tour/3287158188/zoom`, the checker returned three local-data warnings (two S2 sections and Fallen tree) by the next UI observation. Changing the maximum to S0 immediately added the expected S1 warning at 0.78 km. Clicking Fallen tree centered the map; the local overlay then displayed width labels, log icons and narrow-path icons. This complements the prior 50–100 km collection/analysis benchmarks; UI observation time is not a precise benchmark.
+
+Final acceptance also caught and fixed Firefox's dynamic HTML lint finding and a paused bundled-import retry that incorrectly selected a raw-country download. Regression tests verify packaged-file retry and correct same-folder resume instructions.
+
+All agreed buckets are complete. The plan remains as history; its active reference was removed from AGENTS.md. Firefox runtime and mobile validation remain deferred. Packages were generated without changing version 1.4.0, tagging, signing or publishing a release.
