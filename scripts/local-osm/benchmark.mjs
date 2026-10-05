@@ -29,11 +29,11 @@ const server = createServer(async function (req, res) {
 			res.end('<!doctype html><title>Local OSM benchmark</title><p>Running in a worker.</p><script>const w=new Worker("/benchmark-worker.js");w.onmessage=e=>fetch("/result",{method:"POST",body:JSON.stringify(e.data)});w.onerror=e=>fetch("/result",{method:"POST",body:JSON.stringify({error:e.message})});</script>'); return;
 		}
 		let path;
-		if (req.url === "/manifest.json") path = join(data, "manifest.json");
+		if (["/manifest.json", "/data/manifest.json"].includes(req.url)) path = join(data, "manifest.json");
 		else if (req.url.startsWith("/data/") && allowed.has(req.url.slice(6))) path = join(data, req.url.slice(6));
 		else if (req.url === "/source.pbf") path = join(data, "..", "finland.osm.pbf");
-		else if (["/local-osm.js", "/osm-cache.js", "/hazards.js", "/route-check.js", "/osm-pbf.js", "/osm-prepare.js"].includes(req.url)) path = join(root, req.url.slice(1));
-		else if (req.url === "/benchmark-worker.js") path = join(root, mode === "prepare" ? "scripts/local-osm/prepare-worker.js" : mode === "integration" ? "scripts/local-osm/integration-worker.js" : "scripts/local-osm/benchmark-worker.js");
+		else if (["/local-osm.js", "/osm-cache.js", "/hazards.js", "/route-check.js", "/osm-pbf.js", "/osm-prepare.js", "/bundled-osm.js"].includes(req.url)) path = join(root, req.url.slice(1));
+		else if (req.url === "/benchmark-worker.js") path = join(root, mode === "bundled" ? "scripts/local-osm/bundled-worker.js" : mode === "prepare" ? "scripts/local-osm/prepare-worker.js" : mode === "integration" ? "scripts/local-osm/integration-worker.js" : "scripts/local-osm/benchmark-worker.js");
 		else { res.writeHead(404); res.end(); return; }
 		res.setHeader("Content-Type", path.endsWith(".js") ? "text/javascript" : "application/octet-stream");
 		let start = 0, end;

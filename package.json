@@ -7,8 +7,10 @@
 		"data:prepare": ".venv-local-osm/bin/python scripts/local-osm/prepare.py",
 		"test:local-osm": ".venv-local-osm/bin/python -m unittest discover -s scripts/local-osm -p 'test_*.py'",
 		"lint:firefox": "npm run build && web-ext lint --source-dir dist/firefox --warnings-as-errors",
-		"package": "npm test && npm run lint:firefox && web-ext build --source-dir dist/chrome --artifacts-dir artifacts --filename \"chrome--{name}-{version}.zip\" --overwrite-dest && web-ext build --source-dir dist/firefox --artifacts-dir artifacts --filename \"firefox--{name}-{version}.zip\" --overwrite-dest",
-		"dev:firefox": "npm run build && web-ext run --source-dir dist/firefox"
+		"package": "npm run test:local-osm && npm run data:release && npm test && node scripts/release.mjs",
+		"dev:firefox": "npm run build && web-ext run --source-dir dist/firefox",
+		"data:release": "node scripts/local-osm/release-data.mjs",
+		"data:validate": "node scripts/local-osm/validate.mjs"
 	},
 	"engines": {
 		"node": ">=22"

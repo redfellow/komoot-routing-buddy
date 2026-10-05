@@ -1,60 +1,34 @@
 # Release guide
 
-This document is intentionally kept general for public repositories. It covers the release checks and review steps without exposing internal identifiers, account details, or distribution workflows.
+The extension is prepared for self-distribution with separate Chrome and Firefox ZIPs. Local Finland data is part of the guarded release workflow; see [LOCAL-OSM-RELEASES.md](LOCAL-OSM-RELEASES.md).
 
 ## Prepare and test
 
-1. Use a supported Node.js version and run `npm ci` from the repository root.
-2. Update the extension version in the root `manifest.json` before preparing the release build.
-3. Run `npm run package` to run the regression checks and generate both ZIPs directly in `artifacts/`. Names use `chrome--` and `firefox--` prefixes so both can be attached to the same GitHub release.
-4. Test the generated extension builds in a browser before publishing or sharing them.
-5. Record the release version, tested browser versions, and any notable validation results in your release notes.
+1. Run `npm ci` with a supported Node.js version. Set up `.venv-local-osm` with the pinned requirements in [LOCAL-OSM-DATA.md](LOCAL-OSM-DATA.md).
+2. Follow AGENTS.md for authorized version/tag work. Do not bump, tag or package merely to test implementation changes.
+3. When packaging is explicitly requested, run `npm run package`. It obtains the latest public Finland extract, requires a source age of at most seven days, validates the prepared/copy data, runs regression/native tests and Firefox lint, then generates both ZIPs in `artifacts/` with `chrome--` / `firefox--` prefixes.
+4. Provider failure, stale/nonlatest data, invalid geometry/checksums or failed checks stop packaging. Existing data does not silently become a release fallback.
+5. Test the actual outputs before sharing them, including initial country-data import and update recovery. Record browser versions, ZIP sizes, snapshot source date and validation limitations.
 
-## Local installation
+`npm run data:release` prepares/selects data without building the extension. `npm run build` is a code-only developer build; release packaging uses the mandatory data gate.
 
-- Chrome and Chromium-based browsers: enable Developer mode in the extension manager, then load the unpacked build from the generated output directory.
-- Firefox: load the generated extension from the Firefox debugging flow, then reload it after each rebuild.
+## Installation and acceptance
 
-This is only for validation; the final distribution should use the platform's normal publishing flow.
+Chrome/Chromium: unpack the Chrome ZIP and load its folder through Developer mode. Firefox: temporary debugging installation is for development; stable self-distribution uses Mozilla's unlisted signing flow. Signing uploads/agreements are separate authorized actions. Mozilla accepts submissions up to 200 MB, including self-distribution; the packaging flow stops an oversized Firefox candidate. [Mozilla submission guidance](https://www.extensionworkshop.com/documentation/publish/submitting-an-add-on/).
 
-## Browser acceptance checks
+Check:
 
-Test the main Komoot routes and editing flows in both browsers with a logged-in session:
+- New profile: automatic background-tab import, country count/date and no bulk public-provider download for installation.
+- Interrupted import: resume and retention of the previous usable generation.
+- Local overlays and route checks, including covered empty areas, uncovered fallback and known S1 warnings at maximum S0.
+- Weekly/manual country updates, pause/resume, old-data continuity, cleanup and automatic tab closing.
+- Current-route-only refresh, seven-day authoritative empty overrides and replacement by a newer snapshot.
+- Existing Komoot settings, sidebar/layer persistence and unchanged route geometry; unrelated pages stay unaffected.
 
-- Route planning pages and coordinate-based planning URLs.
-- Tour pages and editing views.
-- Extension settings access from the toolbar and page UI.
-- Colour and map styling controls, including preview and reset behaviour.
-- Sidebar or panel state changes, including reload persistence.
-- Layer or map-style settings that should persist between refreshes.
-- A quick check that unrelated Komoot pages remain unaffected and no route is modified unexpectedly.
+Firefox acceptance is currently deferred at the user's request. Mobile remains an assessment, not a supported/verified target. Do not report pending checks as passed.
 
-## Privacy and permissions review
+## Data, privacy and distribution
 
-Before publication, confirm that the extension still matches its documented scope and permissions.
+Keep OSM attribution and the derived database's ODbL notice in both outputs. Geofabrik receives public country-download requests; it does not receive route geometry. Overpass may receive area bounds for uncovered fallback or deliberate current-route refresh. Route geometry and local matching remain in the browser. No analytics were added.
 
-- No analytics or third-party data collection should be added without review.
-- No user route or personal activity data should be uploaded outside the browser session.
-- Preferences should be stored only as needed for extension behaviour.
-- If the extension reads page or UI state to apply map styling, document that clearly in store listings and privacy disclosures.
-
-Reassess this whenever functionality changes.
-
-## Store and distribution
-
-Follow the platform-specific publishing instructions for the browser stores that are used for distribution.
-
-- Complete the listing, screenshots, permissions, and privacy disclosures required by the store.
-- Validate the final packaged build before submitting it for review.
-- Use the store's normal process for updates rather than creating a new extension identity.
-
-For Firefox, follow the official signing and distribution guidance for the target release channel. For Chrome, use the normal Web Store publishing flow.
-
-## Release checklist
-
-- Version updated.
-- Regression tests run successfully.
-- Browser validation completed.
-- Privacy and permissions reviewed.
-- Store listing and disclosures checked.
-- Final build tested and submitted for publication.
+Review the final code, permissions and data/license files. Attach the reviewed ZIPs to the intended release destination only when publishing is authorized. If Firefox signing is needed, obtain and distribute the signed copy through the chosen self-distribution channel; do not imply an unsigned ZIP is a permanent stable-Firefox install.

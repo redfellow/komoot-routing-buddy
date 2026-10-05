@@ -3,7 +3,8 @@
 	const input = document.getElementById("snapshot"), status = document.getElementById("status"), active = document.getElementById("active");
 	const cancel = document.getElementById("cancel"), progress = document.getElementById("progress"), update = document.getElementById("update");
 	const automatic = document.getElementById("automatic"), history = document.getElementById("history");
-	const isAutomaticTab = new URLSearchParams(location.search).get("automatic") === "1";
+	const query = new URLSearchParams(location.search), bundledTab = query.get("bundled") === "1";
+	const isAutomaticTab = query.get("automatic") === "1" || bundledTab;
 	const phases = { download: "Downloading Finland", checksum: "Checking source integrity", prepare: "Preparing trails", compress: "Compressing spatial files", import: "Validating and installing" };
 	let worker, heartbeat, updating = false, latestPhase = "Starting update", jobQueue = Promise.resolve();
 	async function refresh() {
@@ -31,10 +32,10 @@
 	function stop() { worker?.terminate(); worker = undefined; clearInterval(heartbeat); heartbeat = undefined; controls(false); input.value = ""; }
 	function start(message) {
 		if (worker) return;
-		updating = message.type === "update"; worker = new Worker("local-data-worker.js"); controls(true); progress.value = 0; progress.max = 1;
+		updating = ["update", "bundled"].includes(message.type); worker = new Worker("local-data-worker.js"); controls(true); progress.value = 0; progress.max = 1;
 		status.textContent = updating ? "Checking the public Finland source…" : "Validating and importing Finland data…";
 		if (updating) {
-			void saveJob({ running: true, heartbeat: Date.now(), error: null }).catch((e) => console.warn("Update status:", e.message));
+			void saveJob({ running: true, heartbeat: Date.now(), error: null, mode: message.type }).catch((e) => console.warn("Update status:", e.message));
 			heartbeat = setInterval(function () { void saveJob({ running: true, heartbeat: Date.now(), phase: latestPhase }).catch((e) => console.warn("Update heartbeat:", e.message)); }, 15000);
 		}
 		worker.onmessage = async function (event) {
@@ -72,5 +73,6 @@
 	});
 	automatic.addEventListener("change", function () { void api.storage.local.set({ localOsmAutoUpdate: automatic.checked }).catch((e) => { status.textContent = `Could not save automatic-update setting: ${e.message}`; }); });
 	void refresh(); status.textContent = "Import a prepared folder or update from the public Finland source.";
-	if (isAutomaticTab) void api.storage.local.get("localOsmAutoUpdate").then(function (saved) { if (saved.localOsmAutoUpdate !== false) start({ type: "update" }); });
+	if (bundledTab) start({ type: "bundled" });
+	else if (isAutomaticTab) void api.storage.local.get("localOsmAutoUpdate").then(function (saved) { if (saved.localOsmAutoUpdate !== false) start({ type: "update" }); });
 })();

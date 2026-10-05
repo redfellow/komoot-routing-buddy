@@ -1,11 +1,15 @@
 import gzip
+import io
+import sys
+from contextlib import redirect_stdout
+from unittest.mock import patch
 import json
 from pathlib import Path
 import tempfile
 import unittest
 
 import osmium
-from prepare import PreparationError, Shards, digest, polygon, prepare
+from prepare import PreparationError, Shards, digest, polygon, prepare, main
 
 
 class PreparationTests(unittest.TestCase):
@@ -107,6 +111,27 @@ class PreparationTests(unittest.TestCase):
 		with self.assertRaises(PreparationError):
 			shards.emit({"type": "way", "id": 2, "nodes": [1], "geometry": []})
 
+
+
+	def test_cli_uses_pinned_source_url_for_release_preparation(self):
+		pinned = "https://download.geofabrik.de/europe/finland-260930.osm.pbf"
+		calls = []
+
+		def fake_download(url, destination):
+			calls.append(url)
+			if url.endswith(".osm.pbf"):
+				destination.write_bytes(self.source.read_bytes())
+			elif url.endswith(".md5"):
+				destination.write_text(digest(self.source, "md5"))
+			else:
+				destination.write_bytes(self.coverage.read_bytes())
+			return url
+
+		output = self.root / "release"
+		with patch("prepare.download", fake_download), patch.object(sys, "argv", ["prepare.py", "--source-url", pinned, "--output", str(output)]), redirect_stdout(io.StringIO()):
+			main()
+		self.assertEqual(calls[0], pinned)
+		self.assertEqual(json.loads((output / "manifest.json").read_text())["source"]["url"], pinned)
 
 if __name__ == "__main__":
 	unittest.main()

@@ -1,4 +1,4 @@
-importScripts("local-osm.js", "osm-md5.js", "osm-download.js", "osm-pbf.js", "osm-prepare.js");
+importScripts("local-osm.js", "bundled-config.js", "bundled-osm.js", "osm-md5.js", "osm-download.js", "osm-pbf.js", "osm-prepare.js");
 self.onmessage = async function (event) {
 	const store = KrbLocalOsm.create(), downloader = KrbOsmDownload.create(), builder = KrbOsmPrepare.create();
 	let lastProgress = 0;
@@ -7,6 +7,7 @@ self.onmessage = async function (event) {
 		lastProgress = performance.now(); self.postMessage({ progress: value });
 	}
 	async function run() {
+		if (event.data.type === "bundled") return KrbBundledOsm.create().importInto(store, progress);
 		if (event.data.type === "update") {
 			const info = await downloader.discover(AbortSignal.timeout(120000)), active = await store.status();
 			if (active?.source?.md5 === info.md5 && active.source.bytes === info.bytes) return { unchanged: true };

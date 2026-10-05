@@ -90,9 +90,9 @@ Concrete plan: prototype a streaming browser PBF decoder with disk-backed node c
 
 Checkpoint: successful/failed/interrupted updates, old-snapshot continuity, manual refresh scope and interaction between fresh route data and the regional snapshot.
 
-### 6. Integrate releases and validate
+### 6. Integrate releases and validate — implementation reviewed and accepted; packaged acceptance pending
 
-Plan to present after bucket 5 approval: integrate the data command and fresh-data failure gate into release scripts; complete desktop validation, then separately assess mobile feasibility.
+Concrete plan: validate snapshot schema, geometry, membership, checksums, provenance and source age; add a release-data command that prepares the latest dated public extract and publishes an atomic local pointer only after validation; require that snapshot in packaging and copy its prepared files plus ODbL attribution into both browser outputs. Add resumable automatic import from the bundled snapshot on install/update using the existing background-tab worker. Test integrity/freshness/initial-import gates with small fixtures without running build/package commands; document desktop acceptance status and assess mobile resources/API/distribution constraints. User confirmed the latest provider extract with a maximum source age of seven days (168 hours). Firefox validation remains deferred as requested; packaged acceptance needs a separately authorized build.
 
 Checkpoint: release-gate tests, desktop acceptance results and mobile assessment. Running an actual build/release still requires explicit user instruction.
 
@@ -146,3 +146,11 @@ Final cleanup after the user accepts the feature as finished:
 - 2026-10-05: Bucket 5 ready for review. Live Brave public-provider update activated the October 4 snapshot (1,150,527 ways) after successful checksum/preparation/import. Pausing at 44% resumed the saved block checkpoint without downloading again. An unchanged-source automatic tab closed on success. Temporary preparation/download databases were deleted; remaining regional + API storage was 309.6 MB, including the prior generation retained for 24 hours. 183 non-build tests pass; full record equivalence and local speed measurements are recorded in [LOCAL-OSM-UPDATES.md](LOCAL-OSM-UPDATES.md). Firefox check skipped as requested. No build/package or bucket 5 commit. Wait for review before committing/pushing or starting bucket 6.
 
 - 2026-10-05: User approved the bucket 5 commit/push checkpoint and requested starting bucket 6. Preserve the independent 250,000-sample limit edit. Bucket 6 must add bundled installation and release freshness/integrity gates without running builds/packages. Firefox validation remains deferred under the user's instruction.
+
+- 2026-10-05: Bucket 5 committed and pushed as `d8f5203`. Bucket 6 concrete plan presented. Asked to confirm latest-provider data with a maximum 72-hour source age (or seven days). Initial-import/release integrity work can proceed independently of that policy choice.
+
+- 2026-10-05: User confirmed the release freshness policy: latest public Finland extract, maximum seven-day source age. The gate is configured at 168 hours; no older cached-data fallback when current provider metadata/preparation fails.
+
+- 2026-10-05: Bucket 6 implementation ready for review. Added latest-provider/seven-day integrity gates, pinned-source preparation and atomic release-data selection; package flow includes validated Finland files/ODbL notice in both browser outputs, initial background-tab import, and source/build bundle markers. Full existing Finland data passed the new validator; the actual bundle loader imported it in a disposable Chrome worker in 8.01 s with zero provider requests. 191 non-build Node tests and seven native preparation tests pass. See [LOCAL-OSM-RELEASES.md](LOCAL-OSM-RELEASES.md). No build/package/lint/signing/tag/version change or bucket 6 commit. Actual ZIP sizes and packaged initial install remain unverified, Firefox deferred, mobile assessed but not supported. Await review/build instructions; final feature acceptance and AGENTS.md cleanup remain outstanding.
+
+- 2026-10-05: User reviewed and approved bucket 6 implementation and requested continuation. Commit/push checkpoint authorized. Actual package/build and packaged-browser acceptance still require an explicit build instruction under AGENTS.md; Firefox remains deferred. Retain the active-project reference until final feature acceptance.

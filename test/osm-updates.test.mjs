@@ -58,6 +58,9 @@ test("weekly scheduler respects opt-out, backoff and live jobs; due updates open
 	saved.localOsmUpdateState = {}; await context.KrbOsmUpdates.check(); assert.equal(tabs.length, 1); assert.equal(tabs[0].active, false);
 	assert.match(tabs[0].url, /local-data.html\?automatic=1$/);
 	await context.KrbOsmUpdates.check(); assert.equal(tabs.length, 1);
+	saved.localOsmAutoUpdate = false; saved.localOsmUpdateState = { nextCheck: now + 7 * 86400000 };
+	context.KrbBundledOsm = { create() { return { async manifest() { return { snapshotAt: "2026-10-04T12:00:00Z" }; } }; } };
+	await context.KrbOsmUpdates.check(); assert.equal(tabs.length, 2); assert.match(tabs[1].url, /bundled=1$/);
 });
 
 test("provider polygon parser retains actual coverage and holes instead of trusting a bounding box", function () {

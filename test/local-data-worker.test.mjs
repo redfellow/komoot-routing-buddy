@@ -18,7 +18,7 @@ async function fixture(broken = false) {
 			if (path.endsWith(".poly")) return new Response("Finland\n1\n23 60\n25 60\n25 62\n23 62\n23 60\nEND\nEND");
 			return new Response(broken ? new Uint8Array(bytes.length) : bytes);
 		} };
-	for (const file of ["local-osm.js", "osm-md5.js", "osm-download.js", "osm-pbf.js", "osm-prepare.js", "local-data-worker.js"]) runInNewContext(readFileSync(new URL(`../${file}`, import.meta.url), "utf8"), context);
+	for (const file of ["local-osm.js", "bundled-osm.js", "osm-md5.js", "osm-download.js", "osm-pbf.js", "osm-prepare.js", "local-data-worker.js"]) runInNewContext(readFileSync(new URL(`../${file}`, import.meta.url), "utf8"), context);
 	const builder = context.KrbOsmPrepare.create({ name: "fixture-builder" }), store = context.KrbLocalOsm.create();
 	const manifest = await builder.prepare({ size: bytes.length, async read(at, length) { return bytes.subarray(at, at + length); } }, coverage, { url: "older" });
 	manifest.snapshotAt = "2026-09-29T00:00:00Z"; await store.importSnapshot(manifest, builder.loadShard); await builder.close();

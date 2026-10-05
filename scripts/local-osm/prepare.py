@@ -203,7 +203,7 @@ def main():
 	else:
 		with tempfile.TemporaryDirectory(prefix="krb-osm-source-") as temp:
 			root = Path(temp)
-			url = download(BASE + "finland-latest.osm.pbf", root / "source.pbf")
+			url = download(args.source_url, root / "source.pbf")
 			download(url + ".md5", root / "source.md5")
 			download(BASE + "finland.poly", root / "coverage.poly")
 			result = prepare(root / "source.pbf", root / "coverage.poly", args.output, (root / "source.md5").read_text().split()[0], url)

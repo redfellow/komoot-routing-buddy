@@ -245,5 +245,5 @@
 		async function close() { await open(); if (busy) throw new LocalDataError("Cannot close during import"); db.close(); opening = undefined; memory.clear(); residentBytes = 0; }
 		return { importSnapshot, query, status, cleanup, stats, close };
 	}
-	globalThis.KrbLocalOsm = { create, covered, LocalDataError };
+	globalThis.KrbLocalOsm = { create, covered, validateManifest, recordBounds, LocalDataError };
 })();

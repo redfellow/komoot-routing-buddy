@@ -1,0 +1,44 @@
+{
+  "result": {
+    "importMs": 8008.400000035763,
+    "status": {
+      "id": "a291bf249c290b1e1a5af0008ae87b7a103f8f4664184a8211eac9d7598f6ddc",
+      "snapshotAt": "2026-09-30T20:22:42Z",
+      "counts": {
+        "way": 1149167,
+        "node": 28006
+      },
+      "source": {
+        "url": "https://download.geofabrik.de/europe/finland-260930.osm.pbf",
+        "bytes": 768993576,
+        "md5": "d77aaee715dfa708ad5f1b43357dcd87",
+        "sha256": "17a5965098555759a5cbd0b1cede5aebe708dbba39f8c5d4cdfaf6c0a88909ec"
+      },
+      "bytes": 151123317
+    },
+    "covered": [
+      true
+    ],
+    "elements": 14152,
+    "unchanged": true,
+    "unchangedReads": 1,
+    "providerRequests": 0,
+    "storage": {
+      "quota": 10889450703,
+      "usage": 152032463,
+      "usageDetails": {
+        "indexedDB": 152032463
+      }
+    }
+  },
+  "peakProcessTreeRssBytes": 1641496576,
+  "checkedAt": "2026-10-05",
+  "method": "Existing prepared Finland files served locally to the production bundled loader in a disposable Chrome worker; no extension build or ZIP produced.",
+  "integrityGate": {
+    "snapshotAt": "2026-09-30T20:22:42Z",
+    "ways": 1149167,
+    "hazardNodes": 28006,
+    "payloadBytes": 151123317,
+    "latestReleaseCandidate": false
+  }
+}

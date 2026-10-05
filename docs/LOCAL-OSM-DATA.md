@@ -1,6 +1,6 @@
 # Preparing local Finland data
 
-Bucket 2 supplies a data preparation command only. The extension does not yet consume these files; browser storage, lookup and updates are later checkpoints in [LOCAL-OSM-PLAN.md](LOCAL-OSM-PLAN.md).
+The native command prepares the same snapshots now consumed by the extension. For guarded release selection and bundling, see [LOCAL-OSM-RELEASES.md](LOCAL-OSM-RELEASES.md); the original command remains useful for standalone preparation.
 
 ## Setup and command
 
@@ -30,7 +30,7 @@ Use the matching provider checksum, not the example checksum for a different sna
 
 Choose a new output directory for each snapshot. Existing destinations are refused. A sibling staging directory is renamed only after successful extraction and read-back validation. Ordinary failures remove staging; a killed process can leave `.preparing-*` directories, which may be removed after confirming no preparation process is running. These are never completed snapshots.
 
-Allow several GB of temporary disk space: raw PBF, node-location state, uncompressed shards and compressed output coexist during preparation. Bulk data and the local Python environment are ignored by Git. This command neither builds nor packages the extension and is not yet connected to release scripts.
+Allow several GB of temporary disk space: raw PBF, node-location state, uncompressed shards and compressed output coexist during preparation. Bulk data and the local Python environment are ignored by Git. This standalone command neither builds nor packages the extension. The separate `data:release` command invokes it through the guarded release-data flow.
 
 ## Version 1 data contract
 
