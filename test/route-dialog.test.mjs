@@ -42,6 +42,7 @@ test("dialog defaults, completed check, clickable results and route invalidation
 	const f = fixture(async () => ({ data: { type: "FeatureCollection", features: [feature] } }));
 	await f.open();
 	assert.equal(f.fields.level.value, "S1");
+	assert.deepEqual(f.fields.level.children.map((option) => option.textContent), ["S0", "S1", "S2", "S3", "S4", "S5"]);
 	assert.equal(f.fields.width.value, "0.4");
 	assert.equal(f.fields.hazards.checked, false);
 	f.fields.start.click();

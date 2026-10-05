@@ -33,7 +33,7 @@
 	function start(message) {
 		if (worker) return;
 		updating = ["update", "bundled"].includes(message.type); worker = new Worker("local-data-worker.js"); controls(true); progress.value = 0; progress.max = 1;
-		status.textContent = updating ? "Checking the public Finland source…" : "Validating and importing Finland data…";
+		status.textContent = message.type === "bundled" ? "Importing bundled Finland data…" : updating ? "Checking the public Finland source…" : "Validating and importing Finland data…";
 		if (updating) {
 			void saveJob({ running: true, heartbeat: Date.now(), error: null, mode: message.type }).catch((e) => console.warn("Update status:", e.message));
 			heartbeat = setInterval(function () { void saveJob({ running: true, heartbeat: Date.now(), phase: latestPhase }).catch((e) => console.warn("Update heartbeat:", e.message)); }, 15000);
@@ -47,7 +47,7 @@
 				return;
 			}
 			const wasUpdate = updating; stop();
-			status.textContent = message.error ? `Update incomplete: ${message.error}. Retry to resume.` : message.unchanged ? "The installed snapshot is up to date." : "Finland data is ready. Refresh an open map to load it.";
+			status.textContent = message.error ? `Import incomplete: ${message.error}. ${wasUpdate ? "Retry to resume." : "Select the same folder to resume."}` : message.unchanged ? "The installed snapshot is up to date." : "Finland data is ready. Refresh an open map to load it.";
 			if (message.cleanupWarning) status.textContent += ` ${message.cleanupWarning}`;
 			try {
 				if (wasUpdate) await saveJob({ running: false, error: message.error || message.cleanupWarning || null, checkedAt: Date.now(), nextCheck: Date.now() + (message.error ? 6 * 3600000 : 7 * 86400000) });
@@ -58,17 +58,21 @@
 			catch (error) { status.textContent += ` Could not finish update status: ${error.message}`; }
 		};
 		worker.onerror = function (event) {
-			stop(); update.textContent = "Retry update"; status.textContent = `Update interrupted: ${event.message}. Retry to resume.`;
+			stop(); update.textContent = updating ? "Retry update" : "Update Finland data"; status.textContent = `Import interrupted: ${event.message}. ${updating ? "Retry to resume." : "Select the same folder to resume."}`;
 			if (updating) void saveJob({ running: false, error: event.message, nextCheck: Date.now() + 6 * 3600000 }).catch((e) => console.warn("Update error status:", e.message));
 		};
 		worker.postMessage(message);
 	}
 	input.addEventListener("change", function () { if (input.files.length) start({ files: [...input.files] }); });
 	update.addEventListener("click", function () {
+		if (bundledTab) {
+			if (window.confirm("Resume importing the Finland data included with this extension? The current snapshot stays available. Continue?")) start({ type: "bundled" });
+			return;
+		}
 		if (window.confirm("Download and prepare the latest Finland data? The source is approximately 770 MB. Preparation took about seven minutes in our desktop Chrome test, plus download time; your browser may take longer. The current snapshot stays available. Continue?")) start({ type: "update" });
 	});
 	cancel.addEventListener("click", function () {
-		stop(); update.textContent = "Resume update"; status.textContent = "Update paused. Retry to resume; the current snapshot is still available.";
+		stop(); update.textContent = updating ? "Resume update" : "Update Finland data"; status.textContent = updating ? "Update paused. Retry to resume; the current snapshot is still available." : "Import paused. Select the same folder to resume; the current snapshot is still available.";
 		if (updating) void saveJob({ running: false, error: "Paused", nextCheck: Date.now() + 6 * 3600000 }).catch((e) => console.warn("Pause status:", e.message));
 	});
 	automatic.addEventListener("change", function () { void api.storage.local.set({ localOsmAutoUpdate: automatic.checked }).catch((e) => { status.textContent = `Could not save automatic-update setting: ${e.message}`; }); });
