@@ -650,6 +650,11 @@ globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender) {
 });
 
 globalThis.KrbBrowser.storage.onChanged.addListener((changes, area) => {
+	if (area === "local" && changes.localOsmSnapshotUpdatedAt) {
+		routePreloadGeneration++;
+		window.postMessage({ type: "KRB_RELOAD_HAZARDS" }, location.origin);
+		window.postMessage({ type: "KRB_OSM_DATA_UPDATED" }, location.origin);
+	}
   if (area === "sync" && (changes.trailRules || changes.trailOptions || changes.trailColours || changes.trailVisualsEnabled || changes.squadratsOpacity)) refresh(false);
 });
 

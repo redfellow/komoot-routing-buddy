@@ -84,9 +84,9 @@ Concrete plan presented before implementation: load the snapshot store in both b
 
 Checkpoint: fixture comparisons and live desktop verification of matching, warnings, unknowns, coverage boundaries and route performance.
 
-### 5. Add update controls
+### 5. Add update controls — reviewed and accepted
 
-Plan to present after bucket 4 approval: implement the approved weekly update mechanism, snapshot date/status and route-only manual refresh with duration confirmation.
+Concrete plan: prototype a streaming browser PBF decoder with disk-backed node coordinates and shard staging; compare its full-Finland output against the native preparation command before enabling weekly acquisition. Add resumable downloads from a pinned public-provider snapshot, validation and atomic activation, old-snapshot cleanup, date/status and automatic weekly scheduling. Run updates in a temporary background extension tab (user accepted on 2026-10-05), closing it after success; interruption must preserve the current snapshot. Add current-route-only manual Overpass refresh with duration confirmation and authoritative fresh-area overrides. User confirmed seven-day overrides, including authoritative empty results, superseded when a regional snapshot source date is later than the refresh. Test successful/failed/interrupted updates and both desktop browser workers without building or packaging.
 
 Checkpoint: successful/failed/interrupted updates, old-snapshot continuity, manual refresh scope and interaction between fresh route data and the regional snapshot.
 
@@ -138,3 +138,11 @@ Final cleanup after the user accepts the feature as finished:
 - 2026-10-02: User explicitly confirmed maximum S0 and approved treating MTB-rated paths with absent surface as unpaved. Implemented the shared eligibility correction for difficulty, width and parent-way obstacle checks. Explicitly paved paths and road/cycleway classes remain excluded; unrated missing surfaces and explicit unknown/mixed surfaces remain unknown. Replaying the captured 3.94 km route now assesses 892 m and reports S1/S2 difficulty warnings. No build or commit.
 
 - 2026-10-02: User approved bucket 4, requested its commit plus the missing-surface fix, and authorized starting bucket 5. Earlier trail classification/UI edits are preserved in a separate commit. Bucket 5 starts with a bounded browser PBF feasibility prototype, update lifecycle/cleanup and route-only refresh controls; it must not silently replace the approved public-provider update direction.
+
+- 2026-10-05: Bucket 4 and earlier classification work committed/pushed: `1f43685`, `428c809`; missing-surface fix `0f6a37a`. User accepted a temporary background tab for weekly updates. Bucket 5 browser processing prototype is starting. Preserve the separately modified route sample limit in route-check.js.
+
+- 2026-10-05: User confirmed seven-day route overrides and asked to skip Firefox validation. The incomplete disposable Firefox preparation run was stopped. Full Chrome browser preparation matched all 1,177,173 native records, taking 422.8 s plus 7.2 s validated import; peak process-tree RSS 2.11 GB and temporary IDB 2.97 GB. Implementation now includes streaming provider-checksummed/resumable downloads, block-checkpointed disk-backed preparation, update tab controls/scheduling, snapshot cleanup with reader leases, and route-refresh overrides. Live source-extension verification is in progress; no build/package or bucket 5 commit.
+
+- 2026-10-05: Bucket 5 ready for review. Live Brave public-provider update activated the October 4 snapshot (1,150,527 ways) after successful checksum/preparation/import. Pausing at 44% resumed the saved block checkpoint without downloading again. An unchanged-source automatic tab closed on success. Temporary preparation/download databases were deleted; remaining regional + API storage was 309.6 MB, including the prior generation retained for 24 hours. 183 non-build tests pass; full record equivalence and local speed measurements are recorded in [LOCAL-OSM-UPDATES.md](LOCAL-OSM-UPDATES.md). Firefox check skipped as requested. No build/package or bucket 5 commit. Wait for review before committing/pushing or starting bucket 6.
+
+- 2026-10-05: User approved the bucket 5 commit/push checkpoint and requested starting bucket 6. Preserve the independent 250,000-sample limit edit. Bucket 6 must add bundled installation and release freshness/integrity gates without running builds/packages. Firefox validation remains deferred under the user's instruction.

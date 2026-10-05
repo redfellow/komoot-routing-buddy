@@ -37,7 +37,7 @@ globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender, s
 globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 	if (message?.type !== "KRB_CHECK_AREA" || sender.id !== globalThis.KrbBrowser.runtime.id || !sender.tab) return;
 	if (!/^https:\/\/www\.komoot\.com\/(?:tour\/[^/]+\/(?:zoom|edit)|plan(?:\/[^?]*)?)(?:\?.*)?$/.test(sender.url || "")) return;
-	globalThis.KrbHazards.loadRoute(message.bounds, message.following).then((data) => sendResponse({ data }))
+	globalThis.KrbHazards.loadRoute(message.bounds, message.following, { refresh: message.refresh === true }).then((data) => sendResponse({ data }))
 		.catch((error) => sendResponse({ error: error.message, retryMs: error.retryMs, status: error.status, permanent: error.permanent }));
 	return true;
 });

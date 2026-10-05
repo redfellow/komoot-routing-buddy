@@ -19,7 +19,7 @@ function fixture(load) {
 			}
 		};
 	}
-	const window = { innerWidth: 600, innerHeight: 800, postMessage(message) { messages.push(message); }, addEventListener(name, fn) { if (name === "message") listeners.push(fn); } };
+	const window = { confirm() { return true; }, innerWidth: 600, innerHeight: 800, postMessage(message) { messages.push(message); }, addEventListener(name, fn) { if (name === "message") listeners.push(fn); } };
 	const context = { window, console, AbortController, Date: { now: () => now }, location: { origin: "https://www.komoot.com" },
 		document: { createElement: element, documentElement: { append(node) { dialog = node; } } },
 		KrbBrowser: { storage: { sync: { async get() { return {}; }, async set() {} } }, runtime: { sendMessage(message) { return message.type === "KRB_CHECK_LOCAL_ROUTE" ? Promise.resolve({ data: null }) : load(message); } } },
@@ -153,4 +153,28 @@ test("progress fills only for completed areas and stops on cancellation", async 
 	finish({ data: { type: "FeatureCollection", features: [] } });
 	await flush();
 	assert.match(f.fields.status.textContent, /cancelled/);
+});
+
+
+test("manual refresh confirms current-route scope, bypasses local lookup and keeps refresh mode on Retry", async function () {
+	const requests = [];
+	const f = fixture(async function (message) { requests.push(message); return { error: "Invalid query", permanent: true }; });
+	await f.open(); f.fields.refresh.click();
+	const snapshot = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
+	f.receive({ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: snapshot.requestId, route, routeKey: "test" }); await flush();
+	assert.ok(requests.length); assert.ok(requests.every((r) => r.refresh === true));
+	f.fields.start.click();
+	const retry = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
+	f.receive({ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: retry.requestId, route, routeKey: "test" }); await flush();
+	assert.ok(requests.every((r) => r.refresh === true));
+});
+
+test("a new regional snapshot invalidates displayed trail results before they can be reused", async function () {
+	const f = fixture(async () => ({ data: { type: "FeatureCollection", features: [] } }));
+	await f.open(); f.fields.start.click();
+	const request = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
+	f.receive({ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: request.requestId, route, routeKey: "test" }); await flush();
+	f.receive({ type: "KRB_OSM_DATA_UPDATED" });
+	assert.equal(f.fields.status.textContent, "OSM data updated — check trails again.");
+	assert.equal(f.fields.results.children.length, 0);
 });

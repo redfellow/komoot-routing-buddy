@@ -1,7 +1,7 @@
 // Run against an installed desktop browser in a disposable profile, with no extension build.
 import { createServer } from "node:http";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
-import { createReadStream } from "node:fs";
+import { createReadStream, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,7 +20,7 @@ const server = createServer(async function (req, res) {
 		if (req.url === "/result" && req.method === "POST") {
 			let body = ""; for await (const chunk of req) body += chunk;
 			const value = JSON.parse(body); res.end("ok");
-			if (value.progress) console.error(`Validated ${value.progress.completed}/${value.progress.total} shards`);
+			if (value.progress) console.error(`${value.progress.phase || "import"}: ${value.progress.completed}/${value.progress.total}`);
 			else finish(value);
 			return;
 		}
@@ -31,11 +31,19 @@ const server = createServer(async function (req, res) {
 		let path;
 		if (req.url === "/manifest.json") path = join(data, "manifest.json");
 		else if (req.url.startsWith("/data/") && allowed.has(req.url.slice(6))) path = join(data, req.url.slice(6));
-		else if (["/local-osm.js", "/osm-cache.js", "/hazards.js", "/route-check.js"].includes(req.url)) path = join(root, req.url.slice(1));
-		else if (req.url === "/benchmark-worker.js") path = join(root, mode === "integration" ? "scripts/local-osm/integration-worker.js" : "scripts/local-osm/benchmark-worker.js");
+		else if (req.url === "/source.pbf") path = join(data, "..", "finland.osm.pbf");
+		else if (["/local-osm.js", "/osm-cache.js", "/hazards.js", "/route-check.js", "/osm-pbf.js", "/osm-prepare.js"].includes(req.url)) path = join(root, req.url.slice(1));
+		else if (req.url === "/benchmark-worker.js") path = join(root, mode === "prepare" ? "scripts/local-osm/prepare-worker.js" : mode === "integration" ? "scripts/local-osm/integration-worker.js" : "scripts/local-osm/benchmark-worker.js");
 		else { res.writeHead(404); res.end(); return; }
 		res.setHeader("Content-Type", path.endsWith(".js") ? "text/javascript" : "application/octet-stream");
-		const stream = createReadStream(path); stream.on("error", function (error) { res.destroy(error); }); stream.pipe(res);
+		let start = 0, end;
+		if (req.url === "/source.pbf" && req.headers.range) {
+			const match = /^bytes=(\d+)-(\d+)$/.exec(req.headers.range);
+			if (!match) throw new Error("Invalid benchmark range");
+			start = Number(match[1]); end = Number(match[2]);
+			res.writeHead(206, { "Content-Range": `bytes ${start}-${end}/${statSync(path).size}`, "Content-Length": end - start + 1 });
+		}
+		const stream = createReadStream(path, { start, ...(end === undefined ? {} : { end }) }); stream.on("error", function (error) { res.destroy(error); }); stream.pipe(res);
 	}
 	catch (error) { res.writeHead(500); res.end(String(error)); }
 });

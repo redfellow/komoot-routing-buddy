@@ -1,0 +1,120 @@
+{
+  "result": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+    "prepareSeconds": 422.8063000000119,
+    "comparisonSeconds": 14.46830000001192,
+    "importSeconds": 7.233600000023842,
+    "recordsCompared": 1177173,
+    "snapshotAt": "2026-09-30T20:22:42Z",
+    "counts": {
+      "way": 1149167,
+      "node": 28006
+    },
+    "payloadBytes": 150149481,
+    "metrics": {
+      "nodes": 100645860,
+      "nodePages": 12581,
+      "nodeDiskReads": 710359,
+      "peakNodeCacheBytes": 67108856
+    },
+    "storage": {
+      "quota": 13707889198,
+      "usage": 2970470958,
+      "usageDetails": {
+        "indexedDB": 2970470958
+      }
+    }
+  },
+  "peakProcessTreeRssBytes": 2105720832,
+  "checkedAt": "2026-10-05",
+  "source": "2026-09-30T20:22:42Z",
+  "scope": "Disposable Chrome worker, localhost raw PBF input; excludes public-network transfer time. Full record-by-record comparison against native prepared output.",
+  "firefox": "User requested skipping Firefox validation; incomplete run stopped.",
+  "integration": {
+    "result": {
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+      "runs": [
+        {
+          "label": "first-query",
+          "distanceKm": 50.40478492970785,
+          "collectionMs": 300.30000001192093,
+          "totalMs": 372,
+          "features": 9201,
+          "warnings": 4,
+          "checkedKm": 0.7399234447131174,
+          "completed": 52,
+          "cached": 52,
+          "downloaded": 0
+        },
+        {
+          "label": "repeat-query",
+          "distanceKm": 50.40478492970785,
+          "collectionMs": 279.5,
+          "totalMs": 341.39999997615814,
+          "features": 9201,
+          "warnings": 4,
+          "checkedKm": 0.7399234447131174,
+          "completed": 52,
+          "cached": 52,
+          "downloaded": 0
+        },
+        {
+          "label": "first-query",
+          "distanceKm": 100.80956985943504,
+          "collectionMs": 352.7000000476837,
+          "totalMs": 438,
+          "features": 9372,
+          "warnings": 4,
+          "checkedKm": 0.7999965865245728,
+          "completed": 102,
+          "cached": 102,
+          "downloaded": 0
+        },
+        {
+          "label": "repeat-query",
+          "distanceKm": 100.80956985943504,
+          "collectionMs": 359.10000002384186,
+          "totalMs": 437.60000002384186,
+          "features": 9372,
+          "warnings": 4,
+          "checkedKm": 0.7999965865245728,
+          "completed": 102,
+          "cached": 102,
+          "downloaded": 0
+        }
+      ],
+      "networkCalls": 0,
+      "map": {
+        "cacheSource": "local",
+        "features": 0,
+        "counts": {
+          "total": 0,
+          "mud": 0,
+          "vegetation": 0,
+          "narrow": 0,
+          "other": 0
+        }
+      }
+    },
+    "peakProcessTreeRssBytes": 1786380288
+  },
+  "liveBrave": {
+    "source": "Geofabrik Finland dated public extract, actual installed source extension",
+    "pausedAtPercent": 44,
+    "resumeObservedAtPercent": 49,
+    "previousSnapshotAt": "2026-09-30",
+    "activeSnapshotAt": "2026-10-04",
+    "activeWays": 1150527,
+    "payloadDisplayMB": 150,
+    "preciseWallTimeMeasured": false,
+    "bulkRedownloadOnResume": false,
+    "unchangedAutomaticTabClosed": true,
+    "temporaryDatabasesRemoved": true,
+    "remainingDatabases": [
+      "krb-local-osm-v1",
+      "krb-osm-cache-v1"
+    ],
+    "storageAfterCleanupBytes": 309614107,
+    "previousGenerationRetainedFor24Hours": true
+  }
+}

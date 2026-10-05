@@ -24,6 +24,7 @@
 	}
 	const cacheStore = globalThis.KrbOsmCache.create();
 	const localStore = globalThis.KrbLocalOsm?.create();
+	const overrideStore = globalThis.KrbOsmOverrides?.create();
 	let cache;
 	const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 	function displayData(data) {
@@ -176,6 +177,7 @@
 			// Let an existing request settle so it cannot repopulate a cleared cache.
 			await Promise.allSettled([...active].map((request) => request.promise));
 			await cacheStore.clear();
+			await overrideStore?.clear();
 		})().finally(function () { clearing = undefined; });
 		return clearing;
 	}
@@ -218,7 +220,10 @@
 		try {
 			const result = await localStore.query(boxes.map((b) => [b[1], b[0], b[3], b[2]]));
 			if (!result.available || !result.covered.every(Boolean)) return undefined;
-			return { ...convert(result.elements, forRoute), cacheSource: "local", snapshotAt: result.snapshotAt, coveredAreas: boxes.length };
+			const overrides = overrideStore ? await overrideStore.read(boxes, result.snapshotAt) : [];
+			let data = convert(result.elements, forRoute || overrides.length > 0);
+			if (overrides.length) { data = overrideStore.apply(data, overrides); data.counts = countFeatures(data.features); if (!forRoute) data = { ...displayData(data), refreshedAt: data.refreshedAt }; }
+			return { ...data, cacheSource: "local", snapshotAt: result.snapshotAt, refreshedAt: data.refreshedAt, coveredAreas: boxes.length };
 		}
 		catch (error) {
 			console.warn("Local OSM lookup unavailable; using API cache/fallback:", error.message);
@@ -231,11 +236,13 @@
 	}
 	// A failed combined area is retried as individual cells, not the same large query.
 	const singleRouteAreas = new Set();
-	async function loadRoute(bounds, following = []) {
-		const local = await localData([bounds, ...(Array.isArray(following) ? following.slice(0, 3) : [])], true) || await localData([bounds], true);
-		if (local) return local;
-		const cached = await load(bounds, false, true, true);
-		if (cached) return { ...cached, coveredAreas: 1 };
+	async function loadRoute(bounds, following = [], { refresh = false } = {}) {
+		if (!refresh) {
+			const local = await localData([bounds, ...(Array.isArray(following) ? following.slice(0, 3) : [])], true) || await localData([bounds], true);
+			if (local) return local;
+			const cached = await load(bounds, false, true, true);
+			if (cached) return { ...cached, coveredAreas: 1 };
+		}
 		const key = boundsKey(bounds);
 		let combined = bounds, coveredAreas = 1;
 		if (!singleRouteAreas.has(key) && Array.isArray(following)) {
@@ -245,12 +252,12 @@
 				if (next[0] > combined[2] || next[2] < combined[0] || next[1] > combined[3] || next[3] < combined[1]) break;
 				const box = [Math.min(combined[0], next[0]), Math.min(combined[1], next[1]), Math.max(combined[2], next[2]), Math.max(combined[3], next[3])];
 				const area = (box[2] - box[0]) * 111 * (box[3] - box[1]) * 111 * Math.cos((box[0] + box[2]) * Math.PI / 360);
-				if (area > 8 || await load(next, false, true, true)) break;
+				if (area > 8 || !refresh && await load(next, false, true, true)) break;
 				combined = box;
 				coveredAreas++;
 			}
 		}
-		try { return { ...await load(combined, false, true), coveredAreas }; }
+		try { return { ...await (refresh ? refreshArea(combined) : load(combined, false, true)), coveredAreas }; }
 		catch (error) {
 			if (coveredAreas > 1 && ![400, 401, 403, 406].includes(error.status)) {
 				singleRouteAreas.add(key);
@@ -261,6 +268,15 @@
 			throw error;
 		}
 	}
+	async function refreshArea(bounds) {
+		boundsKey(bounds);
+		if (clearing) await clearing;
+		while (active.size >= 2) await Promise.race([...active].map((r) => r.promise.catch((e) => console.debug("Refresh queue:", e.message))));
+		const area = expandedBounds(bounds), promise = fetchProviders(boundsKey(area), true, true), request = { bounds: area, promise, forRoute: true, refresh: true };
+		active.add(request);
+		try { return await promise; }
+		finally { active.delete(request); }
+	}
 	async function load(bounds, prefetch = false, forRoute = false, cacheOnly = false) {
 		if (clearing) await clearing;
 		boundsKey(bounds);
@@ -268,14 +284,26 @@
 			const local = await localData([bounds], forRoute);
 			if (local) return local;
 		}
+		let fresh = [];
+		if (overrideStore) {
+			const snapshot = await localStore?.status().catch((e) => console.warn("Snapshot status unavailable:", e.message));
+			fresh = await overrideStore.read([bounds], snapshot?.snapshotAt);
+			const covering = fresh.find((o) => contains(o.bounds, bounds));
+			if (covering) { const data = overrideStore.apply({ type: "FeatureCollection", features: [], trailSchema: 1 }, fresh); data.counts = countFeatures(data.features); return forRoute ? { ...data, cacheSource: "cache" } : displayData(data); }
+		}
+		function withOverrides(data) {
+			if (!fresh.length) return data;
+			const result = overrideStore.apply(data, fresh.map((o) => ({ ...o, data: forRoute ? o.data : displayData(o.data) })));
+			result.counts = countFeatures(result.features); return result;
+		}
 		await readCache();
 		for (const hit of [...cache.values()].reverse()) {
 			if ((!forRoute || hit.routeComplete && hit.trailSchema === 1) && Date.now() - hit.time < CACHE_TTL && contains(hit.bounds, bounds)) {
 				const payload = await cacheStore.read(hit.id);
 				if (!payload) continue;
 				const data = payload.data;
-				if (forRoute) return { ...data, cacheSource: payload.source };
-				if (hit.routeComplete) return displayData(data);
+				if (forRoute) return withOverrides({ ...data, cacheSource: payload.source });
+				if (hit.routeComplete) return withOverrides(displayData(data));
 				// Upgrade cached icon placement without discarding successful geometry.
 				for (const feature of data.features) {
 					const p = feature.properties;
@@ -286,17 +314,17 @@
 					for (const key of keys) p[`offset_${key}`] = (active.indexOf(key) - (active.length - 1) / 2) * 30;
 				}
 				data.counts = countFeatures(data.features);
-				return data;
+				return withOverrides(data);
 			}
 		}
 		const combined = await cachedCoverage(bounds, forRoute);
-		if (combined) return combined;
+		if (combined) return withOverrides(combined);
 		if (cacheOnly) return undefined;
 		if (clearing) { await clearing; return load(bounds, prefetch, forRoute); }
 		const shared = [...active].find((request) => (!forRoute || request.forRoute) && contains(request.bounds, bounds));
 		if (shared) {
 			const data = await shared.promise;
-			return shared.forRoute && !forRoute ? displayData(data) : data;
+			return withOverrides(shared.forRoute && !forRoute ? displayData(data) : data);
 		}
 		if (active.size >= 2) {
 			await Promise.race([...active].map((request) => request.promise.catch((error) => console.debug("OSM queued request:", error.message))));
@@ -306,16 +334,16 @@
 		const promise = fetchProviders(boundsKey(area), forRoute);
 		const request = { bounds: area, promise, prefetch, forRoute };
 		active.add(request);
-		try { return await promise; }
+		try { return withOverrides(await promise); }
 		finally { active.delete(request); }
 	}
-	async function fetchProviders(key, forRoute = false) {
+	async function fetchProviders(key, forRoute = false, refresh = false) {
 		await identifyRequests();
 		let lastError;
 		for (const provider of providers) {
 			if (provider.busy) continue;
 			if (Date.now() < provider.retryAfter) { lastError = provider.error; continue; }
-			provider.busy = fetchData(key, provider.url, forRoute);
+			provider.busy = fetchData(key, provider.url, forRoute, refresh);
 			try { return await provider.busy; }
 			catch (error) {
 				provider.error = error;
@@ -329,7 +357,7 @@
 		const busy = providers.filter((provider) => provider.busy);
 		if (busy.length) {
 			await Promise.race(busy.map((provider) => provider.busy.catch((error) => console.debug("OSM provider busy:", error.message))));
-			return fetchProviders(key, forRoute);
+			return fetchProviders(key, forRoute, refresh);
 		}
 		const retryMs = Math.max(1, Math.min(...providers.map((provider) => provider.retryAfter)) - Date.now());
 		throw Object.assign(new Error(lastError?.message || "OSM providers temporarily unavailable"), { status: lastError?.status, retryMs, exhausted: true });
@@ -356,7 +384,7 @@
 		}
 		await identification;
 	}
-	async function fetchData(key, endpoint, forRoute = false) {
+	async function fetchData(key, endpoint, forRoute = false, refresh = false) {
 		const query = queryFor(key, forRoute);
 		try {
 			const response = await fetch(endpoint, {
@@ -383,10 +411,14 @@
 			const json = JSON.parse(text + decoder.decode());
 			if (json.remark || !Array.isArray(json.elements)) throw new Error("OSM returned incomplete data");
 			const data = forRoute ? convertRoute(unpack(json.elements)) : convert(unpack(json.elements));
+			if (refresh) {
+				if (!overrideStore) throw Object.assign(new Error("Route refresh storage unavailable"), { permanent: true });
+				await overrideStore.put(key.split(",").map(Number), data);
+			}
 			const entry = { key, time: Date.now(), accessed: Date.now(), data, routeComplete: forRoute };
 			try { await cacheStore.put(entry); }
 			catch (error) { console.warn("OSM area could not be cached:", error); }
-			return forRoute ? { ...data, cacheSource: "network" } : data;
+			return forRoute ? { ...data, cacheSource: "network", ...(refresh ? { refreshedAt: new Date().toISOString() } : {}) } : data;
 		}
 		catch (error) {
 			if (error.name === "TimeoutError") error.message = "OSM request timed out";

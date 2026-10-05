@@ -6,7 +6,8 @@
 	"permissions": [
 		"storage",
 		"unlimitedStorage",
-		"declarativeNetRequestWithHostAccess"
+		"declarativeNetRequestWithHostAccess",
+		"alarms"
 	],
 	"action": {
 		"default_title": "Komoot Routing Buddy",
@@ -65,6 +66,7 @@
 	"host_permissions": [
 		"https://overpass.private.coffee/*",
 		"https://maps.mail.ru/osm/tools/overpass/*",
-		"https://overpass-api.de/*"
+		"https://overpass-api.de/*",
+		"https://download.geofabrik.de/*"
 	]
 }

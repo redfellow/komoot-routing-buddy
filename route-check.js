@@ -225,7 +225,7 @@
 	async function collect(route, load, { signal, progress = function () {}, checkpoint = {}, concurrency = 1, localLoad } = {}) {
 		samples(route);
 		const boxes = areas(route), routeSignature = signature(route);
-		if (checkpoint.signature !== routeSignature) Object.assign(checkpoint, { signature: routeSignature, completed: 0, completedAreas: [], features: [], cached: 0, downloaded: 0, localSnapshotAt: null });
+		if (checkpoint.signature !== routeSignature) Object.assign(checkpoint, { signature: routeSignature, completed: 0, completedAreas: [], features: [], cached: 0, downloaded: 0, localSnapshotAt: null, refreshedAt: null });
 		const done = new Set(checkpoint.completedAreas || Array.from({ length: checkpoint.completed }, (_, i) => i));
 		const reserved = new Set();
 		const features = new Map(checkpoint.features.map((feature) => [feature.id || feature.properties?.osmId, feature]));
@@ -243,6 +243,7 @@
 			if (response?.data?.type === "FeatureCollection" && response.data.cacheSource === "local" && response.data.coveredAreas === boxes.length) {
 				checkpoint.features = response.data.features;
 				checkpoint.localSnapshotAt = response.data.snapshotAt;
+				checkpoint.refreshedAt = response.data.refreshedAt;
 				checkpoint.completedAreas = boxes.map((box, i) => i);
 				checkpoint.completed = boxes.length; checkpoint.cached = boxes.length; checkpoint.downloaded = 0;
 				progress({ completed: boxes.length, total: boxes.length, features: checkpoint.features, cached: boxes.length, downloaded: 0, running: 0 });
@@ -271,6 +272,7 @@
 					for (const index of batch.slice(0, covered)) done.add(index);
 					const counter = ["memory", "disk", "cache", "local"].includes(response.data.cacheSource) ? "cached" : "downloaded";
 					checkpoint[counter] = (checkpoint[counter] || 0) + covered;
+					if (response.data.refreshedAt) checkpoint.refreshedAt = response.data.refreshedAt;
 					checkpoint.completed = done.size;
 					checkpoint.completedAreas = [...done];
 					checkpoint.features = [...features.values()];

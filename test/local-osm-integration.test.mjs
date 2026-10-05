@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 import { gzipSync } from "node:zlib";
 import { createHash, webcrypto } from "node:crypto";
 import { IDBFactory } from "fake-indexeddb";
-const source = ["local-osm.js", "osm-cache.js", "hazards.js", "route-check.js"].map((f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8")).join("\n");
+const source = ["local-osm.js", "osm-cache.js", "osm-overrides.js", "hazards.js", "route-check.js"].map((f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8")).join("\n");
 const box = [61, 24, 61.01, 24.01];
 const way = { type: "way", id: 1, nodes: [2, 3], geometry: [{ lon: 24, lat: 61 }, { lon: 24.005, lat: 61.005 }], tags: { highway: "path", surface: "dirt", "mtb:scale": "2", width: "0.3" } };
 const node = { type: "node", id: 2, lon: 24, lat: 61, tags: { barrier: "log" } };
@@ -79,4 +79,58 @@ test("corrupt local storage falls back to API cache rather than returning empty 
 	const data = await f.context.KrbHazards.load(box);
 	assert.notEqual(data.cacheSource, "local"); assert.equal(data.features.length, 2); assert.equal(f.network(), 0);
 	db.close(); await cached.close(); await f.store.close();
+});
+
+
+test("successful empty manual route refresh removes old local hazards and survives repeated checks", async function () {
+	const f = await fixture(), api = f.context.KrbHazards;
+	let calls = 0;
+	f.context.fetch = async function () { calls++; return { ok: true, body: new Blob([JSON.stringify({ elements: [] })]).stream() }; };
+	const refreshed = await api.loadRoute(box, [], { refresh: true });
+	assert.equal(refreshed.cacheSource, "network"); assert.equal(calls, 1);
+	const again = await api.loadLocalRoute([box]);
+	assert.equal(again.features.length, 0); assert.ok(again.refreshedAt);
+	assert.equal((await api.load(box)).features.length, 0);
+	assert.equal(calls, 1); await f.store.close();
+});
+
+test("failed manual refresh never shadows valid regional data", async function () {
+	const f = await fixture(), api = f.context.KrbHazards;
+	await assert.rejects(api.loadRoute(box, [], { refresh: true }), /Network used/);
+	const local = await api.loadLocalRoute([box]);
+	assert.equal(local.features.length, 2); assert.equal(local.refreshedAt, undefined);
+	await f.store.close();
+});
+
+test("route overrides expire after seven days and are superseded by later source snapshots", async function () {
+	const f = await fixture(), overrides = f.context.KrbOsmOverrides.create();
+	await overrides.put(box, { type: "FeatureCollection", trailSchema: 1, features: [] }, Date.now() - 8 * 86400000);
+	assert.equal((await overrides.read([box], "2026-09-30T00:00:00Z")).length, 0);
+	const refreshed = Date.now(); await overrides.put(box, { type: "FeatureCollection", trailSchema: 1, features: [] }, refreshed);
+	assert.equal((await overrides.read([box], new Date(refreshed - 1000).toISOString())).length, 1);
+	assert.equal((await overrides.read([box], new Date(refreshed + 1000).toISOString())).length, 0);
+	await f.store.close();
+});
+
+test("empty partial overrides remove only covered geometry and preserve distant hazards", async function () {
+	const f = await fixture(), overrides = f.context.KrbOsmOverrides.create();
+	const data = f.context.KrbHazards.convertRoute([way, node]);
+	const clipped = overrides.apply(data, [{ bounds: [61, 24, 61.002, 24.002], time: Date.now(), data: { features: [] } }]);
+	assert.equal(clipped.features.filter((f) => f.geometry.type === "Point").length, 0);
+	const remaining = clipped.features.find((f) => f.geometry.type === "LineString");
+	assert.ok(remaining.geometry.coordinates[0][0] >= 24.002);
+	assert.equal(remaining.geometry.coordinates.at(-1)[0], 24.005);
+	await f.store.close();
+});
+
+test("partial refresh coverage also shadows ordinary cached data outside Finland coverage", async function () {
+	const f = await fixture(), api = f.context.KrbHazards, overrides = f.context.KrbOsmOverrides.create(), cached = f.context.KrbOsmCache.create();
+	const outside = { ...way, geometry: [{ lon: 26, lat: 63 }, { lon: 26.01, lat: 63.01 }] };
+	await cached.put({ key: "63,26,63.02,26.02", time: Date.now(), data: api.convertRoute([outside]), routeComplete: true });
+	await overrides.put([63, 26, 63.005, 26.005], { type: "FeatureCollection", trailSchema: 1, features: [] });
+	const result = await api.loadRoute([63, 26, 63.02, 26.02]);
+	assert.equal(result.features.length, 1);
+	assert.ok(result.features[0].geometry.coordinates[0][0] >= 26.005);
+	assert.ok(result.refreshedAt);
+	assert.equal(f.network(), 0); await cached.close(); await f.store.close();
 });

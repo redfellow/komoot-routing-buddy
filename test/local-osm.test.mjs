@@ -132,3 +132,34 @@ test("quota failure cannot publish replacement or discard the active snapshot", 
 	finally { IDBObjectStore.prototype.put = put; }
 	assert.equal((await store.query([box])).elements[0].id, 10); await store.close();
 });
+
+test("snapshot cleanup removes old generations and abandoned imports while retaining the active data", async function () {
+	const { create } = fixture(), store = create(), older = dataset([way(1)]), newer = dataset([way(2)]), failed = dataset([way(3), way(4)]);
+	await store.importSnapshot(older.manifest, older.load); await store.importSnapshot(newer.manifest, newer.load);
+	await assert.rejects(store.importSnapshot(failed.manifest, async function (entry) { if (entry === failed.manifest.shards[1] || entry.file === failed.manifest.shards[1].file) throw new Error("offline"); return failed.load(entry); }), /offline/);
+	const cleaned = await store.cleanup({ now: Date.now() + 15 * 86400000 });
+	assert.equal(cleaned.removedParts, 2);
+	assert.equal((await store.query([box])).elements[0].id, 2);
+	await store.close();
+});
+
+test("cleanup protects an in-flight reader of the previous generation", async function () {
+	const { create } = fixture(), reader = create(), updater = create(), old = dataset([way(1), way(2)]), next = dataset([way(3)]);
+	await updater.importSnapshot(old.manifest, old.load);
+	let reached, resume; const hit = new Promise((resolve) => { reached = resolve; }), gate = new Promise((resolve) => { resume = resolve; });
+	const original = IDBObjectStore.prototype.get; let paused = false;
+	IDBObjectStore.prototype.get = function (key) {
+		const r = original.call(this, key);
+		if (this.name !== "parts" || paused) return r;
+		paused = true;
+		return { get result() { return r.result; }, set onsuccess(fn) { r.onsuccess = async function () { reached(); await gate; fn(); }; }, set onerror(fn) { r.onerror = fn; } };
+	};
+	try {
+		const pending = reader.query([[20, 60, 30, 70]]); await hit;
+		await updater.importSnapshot(next.manifest, next.load);
+		assert.equal((await updater.cleanup({ inactiveMs: 0 })).removedParts, 0);
+		resume(); assert.equal((await pending).elements.length, 2);
+		assert.equal((await updater.cleanup({ inactiveMs: 0 })).removedParts, 2);
+	}
+	finally { resume(); IDBObjectStore.prototype.get = original; await reader.close(); await updater.close(); }
+});

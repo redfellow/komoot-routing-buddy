@@ -5,8 +5,8 @@ import { resolve, join } from "node:path";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 export const runtimeFiles = [
-	"browser-api.js", "osm-cache.js", "local-osm.js", "hazards.js", "background.js", "settings.js", "sidebar.js", "route-check.js", "route-dialog.js", "content.js",
-	"local-data.html", "local-data.js", "local-data-worker.js", "hazard-icons.png", "map-bridge.js", "planner.css", "popup.html", "popup.css", "popup.js"
+	"browser-api.js", "osm-cache.js", "osm-overrides.js", "local-osm.js", "osm-updates.js", "hazards.js", "background.js", "settings.js", "sidebar.js", "route-check.js", "route-dialog.js", "content.js",
+	"local-data.html", "local-data.js", "local-data-worker.js", "osm-md5.js", "osm-download.js", "osm-pbf.js", "osm-prepare.js", "hazard-icons.png", "map-bridge.js", "planner.css", "popup.html", "popup.css", "popup.js"
 ];
 
 export async function build(output = join(root, "dist")) {
@@ -18,7 +18,7 @@ export async function build(output = join(root, "dist")) {
 		manifest.icons = Object.fromEntries([16, 32, 48, 128].map((size) => [String(size), `icons/icon-${size}.png`]));
 		manifest.action.default_icon = { "16": manifest.icons["16"], "32": manifest.icons["32"] };
 		if (browser === "firefox") {
-			manifest.background = { scripts: ["browser-api.js", "osm-cache.js", "local-osm.js", "hazards.js", "background.js"] };
+			manifest.background = { scripts: ["browser-api.js", "osm-cache.js", "osm-overrides.js", "local-osm.js", "osm-updates.js", "hazards.js", "background.js"] };
 			manifest.browser_specific_settings = {
 				gecko: {
 					id: "komoot-routing-buddy@redfellow",

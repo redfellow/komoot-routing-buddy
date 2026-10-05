@@ -138,7 +138,8 @@
 .krb-route input[type="checkbox"] { accent-color: #267944; }
 .krb-route .krb-route__checkbox { display: flex; gap: 8px; align-items: center; }
 .krb-route__help { font-size: 12px; color: #56645c; }
-.krb-route__actions { display: flex; gap: 8px; }
+.krb-route__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.krb-route__refresh { order: 1; flex-basis: 100%; }
 .krb-route__actions button, .krb-route__results button { border: 0; border-radius: 8px; padding: 9px 12px; background: #e9efeb; color: #17221c; font: inherit; cursor: pointer; }
 .krb-route__actions button:disabled { opacity: .5; cursor: wait; }
 .krb-route__results { list-style: none; padding: 0; margin: 8px 0 0; }

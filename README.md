@@ -94,3 +94,10 @@ The extension requests `unlimitedStorage` for its larger local OSM cache while i
 Route checking runs up to two downloads concurrently on different providers and combines up to four adjacent uncached areas per download (up to 8 km² before padding). Cached areas are reused, and failed combined downloads retry with smaller areas. Progress counts route areas, so one successful download can advance several steps.
 
 Trail classification uses OSM way type and surface tags, not Komoot’s summary categories. Older route cache entries missing these fields are refreshed once when needed; they remain usable for map display. If no MTB-rated unpaved trails are identified, the checker says so instead of reporting a successful trail assessment.
+
+
+### Local Finland data and updates
+
+Open **Local Finland data** in extension settings to import a prepared snapshot or update Finland data from the public Geofabrik extract. Weekly automatic updates are enabled by default once a snapshot is installed. They use a temporary background tab, keeping the previous data available until validation finishes. Pause or close the tab to resume later. Expect a roughly 770 MB source download and several minutes of processing; allow several GB of temporary disk space.
+
+**Update current route from OSM** in the trail checker deliberately fetches fresh online data along the current route. It confirms first and retains successful areas for seven days, including empty results, until a newer Finland snapshot supersedes them. **Clear OSM cache** removes these overrides too; it does not remove the Finland snapshot. See [local update details](docs/LOCAL-OSM-UPDATES.md).

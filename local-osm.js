@@ -125,7 +125,7 @@
 		}
 		async function status() {
 			const active = await get("meta", "active");
-			return active ? { id: active.id, snapshotAt: active.manifest.snapshotAt, counts: active.manifest.counts, bytes: active.manifest.shards.reduce((n, s) => n + s.bytes, 0) } : null;
+			return active ? { id: active.id, snapshotAt: active.manifest.snapshotAt, counts: active.manifest.counts, source: active.manifest.source, bytes: active.manifest.shards.reduce((n, s) => n + s.bytes, 0) } : null;
 		}
 		async function importSnapshot(input, loadShard, { signal, onProgress } = {}) {
 			if (busy) throw new LocalDataError("Snapshot import already running in this store");
@@ -135,6 +135,7 @@
 				const id = await sha256(new TextEncoder().encode(JSON.stringify(manifest)));
 				const previous = await get("meta", "active");
 				if (previous?.id === id) return { id, unchanged: true };
+				await write("meta", (tx) => tx.objectStore("meta").put({ id, pending: true, updatedAt: Date.now() }, ["snapshot", id]));
 				const counts = { way: 0, node: 0 }; let completed = 0;
 				for (const entry of manifest.shards) {
 					signal?.throwIfAborted();
@@ -145,7 +146,10 @@
 						if (!(bytes instanceof Uint8Array) || bytes.byteLength !== entry.bytes || await sha256(bytes) !== entry.sha256) throw new LocalDataError("Local OSM shard checksum mismatch");
 						const found = await scan(bytes, entry, function () {}, signal);
 						part = { bytes, counts: found };
-						await write("parts", (tx) => tx.objectStore("parts").put(part, [id, entry.file])); counters.writes++;
+						await write(["parts", "meta"], function (tx) {
+							tx.objectStore("parts").put(part, [id, entry.file]);
+							tx.objectStore("meta").put({ id, pending: true, updatedAt: Date.now() }, ["snapshot", id]);
+						}); counters.writes++;
 					}
 					counts.way += part.counts.way; counts.node += part.counts.node;
 					completed++; onProgress?.({ completed, total: manifest.shards.length, reused });
@@ -157,6 +161,8 @@
 					const store = tx.objectStore("meta"), r = store.get("active");
 					r.onsuccess = function () {
 						if ((r.result?.id || null) !== (previous?.id || null)) { tx.abort(); return; }
+						if (r.result) store.put({ id: r.result.id, pending: false, updatedAt: Date.now() }, ["snapshot", r.result.id]);
+						store.put({ id, pending: false, updatedAt: Date.now() }, ["snapshot", id]);
 						store.put({ id, manifest }, "active");
 					};
 				});
@@ -172,40 +178,72 @@
 		}
 		async function query(boxes, { signal } = {}) {
 			if (!Array.isArray(boxes) || !boxes.length || boxes.length > 10000 || boxes.some((b) => !boundsValid(b))) throw new LocalDataError("Invalid local OSM query bounds");
-			const active = await get("meta", "active");
+			const lease = ["reader", crypto.randomUUID()];
+			let active;
+			await write("meta", function (tx) {
+				const store = tx.objectStore("meta"), r = store.get("active");
+				r.onsuccess = function () { active = r.result; if (active) store.put({ id: active.id, expires: Date.now() + 600000 }, lease); };
+			});
 			if (!active) return { available: false, covered: boxes.map(() => false), elements: [] };
-			const { id, manifest } = active;
-			const coverage = boxes.map((b) => covered(manifest.coverage, b));
-			const results = new Map(); let size = 0, selected = 0;
-			// Spatial directory sorted by western extent; skip files east of every query.
-			const east = Math.max(...boxes.map((b) => b[2]));
-			for (const entry of [...manifest.shards].sort((a, b) => a.bounds[0] - b.bounds[0])) {
-				if (entry.bounds[0] > east) break;
-				if (!boxes.some((b) => intersects(entry.bounds, b))) continue;
-				signal?.throwIfAborted(); selected++;
-				const key = `${id}/${entry.file}`;
-				let bytes = memory.get(key);
-				if (bytes) counters.memoryHits++;
-				else {
-					bytes = (await get("parts", [id, entry.file]))?.bytes; counters.diskReads++;
-					if (!bytes || bytes.byteLength !== entry.bytes || await sha256(bytes) !== entry.sha256) throw new LocalDataError("Local snapshot file missing or corrupt");
-				}
-				remember(key, bytes);
-				await scan(bytes, entry, function (item, bounds, length) {
-					if (!boxes.some((b) => intersects(bounds, b))) return;
-					const key = `${item.type}/${item.id}`;
-					if (!results.has(key)) {
-						size += length * 2;
-						if (size > resultBytes) throw new LocalDataError("Local query result exceeds budget; request smaller areas");
-						results.set(key, item);
+			try {
+				const { id, manifest } = active;
+				const coverage = boxes.map((b) => covered(manifest.coverage, b));
+				const results = new Map(); let size = 0, selected = 0;
+				// Spatial directory sorted by western extent; skip files east of every query.
+				const east = Math.max(...boxes.map((b) => b[2]));
+				for (const entry of [...manifest.shards].sort((a, b) => a.bounds[0] - b.bounds[0])) {
+					if (entry.bounds[0] > east) break;
+					if (!boxes.some((b) => intersects(entry.bounds, b))) continue;
+					signal?.throwIfAborted(); selected++;
+					await write("meta", (tx) => tx.objectStore("meta").put({ id, expires: Date.now() + 600000 }, lease));
+					const key = `${id}/${entry.file}`;
+					let bytes = memory.get(key);
+					if (bytes) counters.memoryHits++;
+					else {
+						bytes = (await get("parts", [id, entry.file]))?.bytes; counters.diskReads++;
+						if (!bytes || bytes.byteLength !== entry.bytes || await sha256(bytes) !== entry.sha256) throw new LocalDataError("Local snapshot file missing or corrupt");
 					}
-				}, signal);
+					remember(key, bytes);
+					await scan(bytes, entry, function (item, bounds, length) {
+						if (!boxes.some((b) => intersects(bounds, b))) return;
+						const key = `${item.type}/${item.id}`;
+						if (!results.has(key)) {
+							size += length * 2;
+							if (size > resultBytes) throw new LocalDataError("Local query result exceeds budget; request smaller areas");
+							results.set(key, item);
+						}
+					}, signal);
+				}
+				return { available: true, id, snapshotAt: manifest.snapshotAt, covered: coverage, elements: [...results.values()], shardsRead: selected };
 			}
-			return { available: true, id, snapshotAt: manifest.snapshotAt, covered: coverage, elements: [...results.values()], shardsRead: selected };
+			finally { await write("meta", (tx) => tx.objectStore("meta").delete(lease)); }
+		}
+		// Reader leases protect a query's immutable generation during concurrent cleanup.
+		async function cleanup({ now = Date.now(), inactiveMs = 86400000, pendingMs = 14 * 86400000 } = {}) {
+			let removed = 0;
+			await write(["meta", "parts"], function (tx) {
+				const meta = tx.objectStore("meta"), r = meta.getAll(), keys = meta.getAllKeys(), active = meta.get("active");
+				active.onsuccess = function () {
+					const protectedIds = new Set([active.result?.id]), candidates = new Set();
+					for (let i = 0; i < r.result.length; i++) {
+						const key = keys.result[i], value = r.result[i];
+						if (Array.isArray(key) && key[0] === "reader") {
+							if (value.expires > now) protectedIds.add(value.id); else meta.delete(key);
+						}
+					}
+					for (let i = 0; i < r.result.length; i++) {
+						const key = keys.result[i], value = r.result[i];
+						if (Array.isArray(key) && key[0] === "snapshot" && !protectedIds.has(value.id) && now - value.updatedAt >= (value.pending ? pendingMs : inactiveMs)) { candidates.add(value.id); meta.delete(key); }
+					}
+					const cursor = tx.objectStore("parts").openCursor();
+					cursor.onsuccess = function () { const c = cursor.result; if (!c) return; if (candidates.has(c.key[0])) { c.delete(); removed++; } c.continue(); };
+				};
+			});
+			memory.clear(); residentBytes = 0; return { removedParts: removed };
 		}
 		function stats() { return { ...counters, residentBytes, memoryLimit: memoryBytes, resultLimit: resultBytes }; }
 		async function close() { await open(); if (busy) throw new LocalDataError("Cannot close during import"); db.close(); opening = undefined; memory.clear(); residentBytes = 0; }
-		return { importSnapshot, query, status, stats, close };
+		return { importSnapshot, query, status, cleanup, stats, close };
 	}
 	globalThis.KrbLocalOsm = { create, covered, LocalDataError };
 })();
