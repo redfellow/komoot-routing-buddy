@@ -34,7 +34,7 @@
 				const a = line.coordinates[i - 1], b = line.coordinates[i];
 				const length = distance(a, b);
 				const count = Math.ceil(length / step);
-				if (result.length + count > 100000) throw new Error("Route is too large to check in one pass; split it into shorter routes.");
+				if (result.length + count > 250000) throw new Error("Route is too large to check in one pass; split it into shorter routes.");
 				for (let j = 0; j < count; j++) result.push({ a: interpolate(a, b, j / count), b: interpolate(a, b, (j + 1) / count), point: interpolate(a, b, (j + 0.5) / count), start: travelled + j * length / count, length: length / count, part, properties: line.properties });
 				travelled += length;
 			}
