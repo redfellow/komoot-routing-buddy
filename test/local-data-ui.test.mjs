@@ -4,12 +4,11 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
 const source = await readFile(new URL("../local-data.js", import.meta.url), "utf8");
-function setup(search = "") {
+function setup(search = "", saved = {}) {
 	const elements = new Map(), messages = [], confirmations = [];
 	for (const id of ["snapshot", "status", "active", "cancel", "progress", "update", "automatic", "history"]) {
 		elements.set(id, { files: [], addEventListener(type, callback) { this[type] = callback; } });
 	}
-	const saved = {};
 	vm.runInNewContext(source, {
 		URLSearchParams, location: { search }, console, setInterval() { return 1; }, clearInterval() {},
 		document: { getElementById(id) { return elements.get(id); } },
@@ -39,4 +38,21 @@ test("paused folder import asks for the same folder instead of an update retry",
 	ui.elements.get("cancel").click();
 	assert.equal(ui.elements.get("update").textContent, "Update Finland data");
 	assert.match(ui.elements.get("status").textContent, /Select the same folder to resume/);
+});
+
+test("reopened settings resume a paused bundled import from packaged files", async function () {
+	const ui = setup("", { localOsmUpdateState: { mode: "bundled", error: "Paused" } });
+	await new Promise(setImmediate);
+	assert.equal(ui.elements.get("update").textContent, "Resume update");
+	ui.elements.get("update").click();
+	assert.equal(ui.messages[0].type, "bundled");
+	assert.match(ui.confirmations[0], /included with this extension/);
+});
+
+test("ordinary manual updates still use the public Finland download", async function () {
+	const ui = setup();
+	await new Promise(setImmediate);
+	ui.elements.get("update").click();
+	assert.equal(ui.messages[0].type, "update");
+	assert.match(ui.confirmations[0], /770 MB/);
 });

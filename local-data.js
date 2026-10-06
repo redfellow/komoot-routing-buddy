@@ -6,7 +6,7 @@
 	const query = new URLSearchParams(location.search), bundledTab = query.get("bundled") === "1";
 	const isAutomaticTab = query.get("automatic") === "1" || bundledTab;
 	const phases = { download: "Downloading Finland", checksum: "Checking source integrity", prepare: "Preparing trails", compress: "Compressing spatial files", import: "Validating and installing" };
-	let worker, heartbeat, updating = false, latestPhase = "Starting update", jobQueue = Promise.resolve();
+	let worker, heartbeat, resumeMode = "update", updating = false, latestPhase = "Starting update", jobQueue = Promise.resolve();
 	async function refresh() {
 		const store = KrbLocalOsm.create();
 		try {
@@ -14,6 +14,7 @@
 			active.textContent = snapshot ? `Active Finland snapshot: ${snapshot.snapshotAt.slice(0, 10)} · ${snapshot.counts.way.toLocaleString()} ways · ${Math.round(snapshot.bytes / 1000000)} MB` : "No local snapshot installed.";
 			automatic.checked = saved.localOsmAutoUpdate !== false;
 			const job = saved.localOsmUpdateState;
+			resumeMode = job?.error && job.mode === "bundled" ? "bundled" : "update";
 			history.textContent = job?.running && Date.now() - job.heartbeat < 120000 ? `Update running: ${job.phase || "starting"}` : job?.error ? `Last update: ${job.error}` : job?.checkedAt ? `Last update check: ${new Date(job.checkedAt).toLocaleString()}` : snapshot ? "Automatic updates check for newer Finland data weekly." : "Weekly updates start after a local snapshot is installed.";
 			if (!worker) update.textContent = job?.error === "Paused" ? "Resume update" : job?.error ? "Retry update" : "Update Finland data";
 		}
@@ -65,7 +66,7 @@
 	}
 	input.addEventListener("change", function () { if (input.files.length) start({ files: [...input.files] }); });
 	update.addEventListener("click", function () {
-		if (bundledTab) {
+		if (bundledTab || resumeMode === "bundled") {
 			if (window.confirm("Resume importing the Finland data included with this extension? The current snapshot stays available. Continue?")) start({ type: "bundled" });
 			return;
 		}
