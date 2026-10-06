@@ -1,8 +1,8 @@
 {
 	"manifest_version": 3,
 	"name": "Komoot Routing Buddy",
-	"version": "1.4.0",
-	"description": "Make MTB trail difficulty easier to read in the Komoot route planner.",
+	"version": "1.5.0",
+	"description": "Colour MTB trails, show mapped hazards and check the trails along your Komoot route.",
 	"permissions": ["storage", "unlimitedStorage", "declarativeNetRequestWithHostAccess", "alarms"],
 	"action": {
 		"default_title": "Komoot Routing Buddy",

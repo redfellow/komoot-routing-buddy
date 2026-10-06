@@ -5,7 +5,7 @@ Distribute the Chrome ZIP and a signed Firefox XPI through GitHub Releases. The 
 ## Prepare and test
 
 1. Run `npm ci` with a supported Node.js version. Set up `.venv-local-osm` with the pinned requirements in [LOCAL-OSM.md](LOCAL-OSM.md).
-2. Set the agreed version in `manifest.json` and update release notes. Follow AGENTS.md for requested commit/tag work.
+2. Set the agreed version in `manifest.json` and update [release notes](../RELEASE-NOTES.md). Follow AGENTS.md for requested commit/tag work.
 3. When packaging is explicitly requested, run `npm run package`. It obtains the latest public Finland extract, requires a source age of at most seven days, validates the prepared/copy data, runs regression/native tests and Firefox lint, then generates both ZIPs in `artifacts/` with `chrome--` / `firefox--` prefixes.
 4. Provider failure, stale/nonlatest data, invalid geometry/checksums or failed checks stop packaging. Existing data does not silently become a release fallback.
 5. Test the actual outputs before sharing them, including initial country-data import and update recovery. Record browser versions, ZIP sizes, snapshot source date and validation limitations.
@@ -33,3 +33,8 @@ Keep OSM attribution and the derived database's ODbL notice in both outputs. Geo
 
 Review the final code, permissions and data/license files. Attach the reviewed ZIPs to the intended release destination only when publishing is authorized. If Firefox signing is needed, obtain and distribute the signed copy through the chosen self-distribution channel; do not imply an unsigned ZIP is a permanent stable-Firefox install.
 
+## 1.5.0 preparation
+
+Verified on 2026-10-06: 196 Node tests, seven native-data tests, JavaScript convention checks and Firefox lint pass. Both ZIPs are about 150 MB, include the October 4 Finland extract and pass checksum/content validation. The provider's latest-source identity was rechecked before handover.
+
+The final package was tested in Chrome 154.0.8037.98 for local trail warnings, warning navigation and the revised settings/data pages. Firefox runtime testing remains deferred. ZIPs, SHA-256 checksums and release notes are prepared. Firefox signing and release publication remain separate steps.
