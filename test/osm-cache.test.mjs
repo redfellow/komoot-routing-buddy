@@ -10,8 +10,27 @@ function fixture(options = {}) {
 	return (overrides = {}) => context.KrbOsmCache.create({ ...options, ...overrides });
 }
 function area(i, text = "example", time = Date.now()) {
-	return { key: `60,${20 + i * 0.01},60.001,${20.001 + i * 0.01}`, routeComplete: true, time,
-		data: { type: "FeatureCollection", features: [{ type: "Feature", properties: { osmId: `way/${i}`, label: text }, geometry: { type: "LineString", coordinates: [[20, 60], [20.001, 60.001]] } }] } };
+	return {
+		key: `60,${20 + i * 0.01},60.001,${20.001 + i * 0.01}`,
+		routeComplete: true,
+		time,
+		data: {
+			type: "FeatureCollection",
+			features: [
+				{
+					type: "Feature",
+					properties: { osmId: `way/${i}`, label: text },
+					geometry: {
+						type: "LineString",
+						coordinates: [
+							[20, 60],
+							[20.001, 60.001],
+						],
+					},
+				},
+			],
+		},
+	};
 }
 const key = (entry) => `route:${entry.key}`;
 
@@ -23,7 +42,8 @@ test("90 megabyte-scale areas survive restart; startup loads metadata, hits neve
 	assert.equal(cache.stats().areas, 90);
 	assert.ok(cache.stats().residentBytes <= 2 * 1024 * 1024);
 	await cache.close();
-	cache = create(); await cache.list();
+	cache = create();
+	await cache.list();
 	assert.equal(cache.stats().residentBytes, 0);
 	assert.equal(cache.stats().areas, 90);
 	for (const entry of entries) {
@@ -40,8 +60,23 @@ test("90 megabyte-scale areas survive restart; startup loads metadata, hits neve
 });
 
 test("migration keeps unexpired route/display entries and removes legacy only after commit", async function () {
-	let stored = { osmHazardsCacheV4: [area(0), { ...area(1), routeComplete: false }, area(2, "expired", Date.now() - 8 * 86400000)] };
-	const create = fixture({ storage: { async get() { return stored; }, async remove() { stored = {}; } } });
+	let stored = {
+		osmHazardsCacheV4: [
+			area(0),
+			{ ...area(1), routeComplete: false },
+			area(2, "expired", Date.now() - 8 * 86400000),
+		],
+	};
+	const create = fixture({
+		storage: {
+			async get() {
+				return stored;
+			},
+			async remove() {
+				stored = {};
+			},
+		},
+	});
 	const cache = create();
 	const entries = await cache.list();
 	assert.equal(entries.size, 2);
@@ -56,11 +91,17 @@ test("LRU eviction updates metadata only and touching does not extend seven-day 
 	let time = 1000;
 	const create = fixture({ maxAreas: 2, now: () => time });
 	let cache = create();
-	const a = area(0, "a", time++), b = area(1, "b", time++), c = area(2, "c", time++);
-	await cache.put(a); await cache.put(b);
-	time++; await cache.read(key(a));
-	await cache.close(); cache = create();
-	time++; await cache.put(c);
+	const a = area(0, "a", time++),
+		b = area(1, "b", time++),
+		c = area(2, "c", time++);
+	await cache.put(a);
+	await cache.put(b);
+	time++;
+	await cache.read(key(a));
+	await cache.close();
+	cache = create();
+	time++;
+	await cache.put(c);
 	assert.equal(await cache.read(key(b)), undefined);
 	assert.ok(await cache.read(key(a)));
 	time = a.time + 7 * 86400000;
@@ -78,13 +119,24 @@ test("byte budget uses UTF-8 payload size and clearing deletes disk plus RAM", a
 	await cache.clear();
 	assert.equal(cache.stats().bytes, 0);
 	assert.equal(cache.stats().residentBytes, 0);
-	await cache.close(); cache = create();
+	await cache.close();
+	cache = create();
 	assert.equal((await cache.list()).size, 0);
 });
 
 test("failed migration preserves legacy storage and queued clear cannot be repopulated", async function () {
 	let removed = false;
-	const create = fixture({ diskBytes: 1000, storage: { async get() { return { osmHazardsCacheV4: [area(0, "x".repeat(2000))] }; }, async remove() { removed = true; } } });
+	const create = fixture({
+		diskBytes: 1000,
+		storage: {
+			async get() {
+				return { osmHazardsCacheV4: [area(0, "x".repeat(2000))] };
+			},
+			async remove() {
+				removed = true;
+			},
+		},
+	});
 	const cache = create();
 	await cache.list();
 	assert.equal(removed, false);
@@ -96,7 +148,6 @@ test("failed migration preserves legacy storage and queued clear cannot be repop
 	assert.equal((await cache.list()).size, 0);
 });
 
-
 test("quota failure evicts once and retries atomically; clone failures cannot leave orphan metadata", async function () {
 	const create = fixture();
 	const cache = create();
@@ -104,11 +155,16 @@ test("quota failure evicts once and retries atomically; clone failures cannot le
 	const original = IDBObjectStore.prototype.put;
 	let failures = 0;
 	IDBObjectStore.prototype.put = function (...args) {
-		if (this.name === "geometry" && failures++ === 0) throw new DOMException("Disk full", "QuotaExceededError");
+		if (this.name === "geometry" && failures++ === 0)
+			throw new DOMException("Disk full", "QuotaExceededError");
 		return original.apply(this, args);
 	};
-	try { await cache.put(area(4)); }
-	finally { IDBObjectStore.prototype.put = original; }
+	try {
+		await cache.put(area(4));
+	}
+	finally {
+		IDBObjectStore.prototype.put = original;
+	}
 	assert.equal(cache.stats().areas, 4);
 	assert.equal(await cache.read(key(area(0))), undefined);
 	assert.ok(await cache.read(key(area(4))));

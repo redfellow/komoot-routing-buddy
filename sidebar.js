@@ -2,13 +2,13 @@
 	if (!/^\/(?:tour\/[^/]+\/(?:zoom|edit)|plan(?:\/.*)?)$/.test(location.pathname)) return;
 	const arrows = {
 		"M15.615 18.885L8.745 12l6.87-6.885L13.5 3l-9 9 9 9 2.115-2.115z": true,
-		"M5.385 5.115L12.255 12l-6.87 6.885L7.5 21l9-9-9-9-2.115 2.115z": false
+		"M5.385 5.115L12.255 12l-6.87 6.885L7.5 21l9-9-9-9-2.115 2.115z": false,
 	};
 	let userChanged = false;
 	let saveTimer;
 
 	function readSidebar() {
-		for (const path of document.querySelectorAll('button svg[viewBox="0 0 24 24"] path')) {
+		for (const path of document.querySelectorAll("button svg[viewBox=\"0 0 24 24\"] path")) {
 			const shape = path.getAttribute("d");
 			if (Object.hasOwn(arrows, shape)) {
 				return { button: path.closest("button"), open: arrows[shape] };
@@ -32,14 +32,35 @@
 		}, 0);
 	}
 
-	document.addEventListener("click", function (event) {
-		if (event.isTrusted && readSidebar()?.button.contains(event.target)) rememberChange();
-	}, true);
-	document.addEventListener("keydown", function (event) {
-		if (!event.isTrusted || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.key.toLowerCase() !== "h") return;
-		if (event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
-		rememberChange();
-	}, true);
+	document.addEventListener(
+		"click",
+		function (event) {
+			if (event.isTrusted && readSidebar()?.button.contains(event.target)) rememberChange();
+		},
+		true,
+	);
+	document.addEventListener(
+		"keydown",
+		function (event) {
+			if (
+				!event.isTrusted ||
+				event.repeat ||
+				event.ctrlKey ||
+				event.metaKey ||
+				event.altKey ||
+				event.key.toLowerCase() !== "h"
+			)
+				return;
+			if (
+				event.target.closest(
+					"input, textarea, select, [contenteditable]:not([contenteditable=\"false\"])",
+				)
+			)
+				return;
+			rememberChange();
+		},
+		true,
+	);
 
 	async function restore() {
 		try {

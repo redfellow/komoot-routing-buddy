@@ -3,12 +3,7 @@
 	"name": "Komoot Routing Buddy",
 	"version": "1.4.0",
 	"description": "Make MTB trail difficulty easier to read in the Komoot route planner.",
-	"permissions": [
-		"storage",
-		"unlimitedStorage",
-		"declarativeNetRequestWithHostAccess",
-		"alarms"
-	],
+	"permissions": ["storage", "unlimitedStorage", "declarativeNetRequestWithHostAccess", "alarms"],
 	"action": {
 		"default_title": "Komoot Routing Buddy",
 		"default_popup": "popup.html",
@@ -36,22 +31,14 @@
 				"route-dialog.js",
 				"content.js"
 			],
-			"css": [
-				"planner.css"
-			],
+			"css": ["planner.css"],
 			"run_at": "document_idle"
 		}
 	],
 	"web_accessible_resources": [
 		{
-			"resources": [
-				"map-bridge.js",
-				"hazard-icons.png",
-				"popup.html"
-			],
-			"matches": [
-				"https://www.komoot.com/*"
-			]
+			"resources": ["map-bridge.js", "hazard-icons.png", "popup.html"],
+			"matches": ["https://www.komoot.com/*"]
 		}
 	],
 	"background": {

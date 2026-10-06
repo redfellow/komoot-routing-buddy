@@ -5,17 +5,73 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("../local-data.js", import.meta.url), "utf8");
 function setup(search = "", saved = {}) {
-	const elements = new Map(), messages = [], confirmations = [];
-	for (const id of ["snapshot", "status", "active", "cancel", "progress", "update", "automatic", "history"]) {
-		elements.set(id, { files: [], addEventListener(type, callback) { this[type] = callback; } });
+	const elements = new Map(),
+		messages = [],
+		confirmations = [];
+	for (const id of [
+		"snapshot",
+		"status",
+		"active",
+		"cancel",
+		"progress",
+		"update",
+		"automatic",
+		"history",
+	]) {
+		elements.set(id, {
+			files: [],
+			addEventListener(type, callback) {
+				this[type] = callback;
+			},
+		});
 	}
 	vm.runInNewContext(source, {
-		URLSearchParams, location: { search }, console, setInterval() { return 1; }, clearInterval() {},
-		document: { getElementById(id) { return elements.get(id); } },
-		window: { confirm(text) { confirmations.push(text); return true; } },
-		KrbBrowser: { storage: { local: { async get() { return saved; }, async set(value) { Object.assign(saved, value); } } } },
-		KrbLocalOsm: { create() { return { async status() { return null; }, async close() {} }; } },
-		Worker: class { postMessage(message) { messages.push(message); } terminate() {} }
+		URLSearchParams,
+		location: { search },
+		console,
+		setInterval() {
+			return 1;
+		},
+		clearInterval() {},
+		document: {
+			getElementById(id) {
+				return elements.get(id);
+			},
+		},
+		window: {
+			confirm(text) {
+				confirmations.push(text);
+				return true;
+			},
+		},
+		KrbBrowser: {
+			storage: {
+				local: {
+					async get() {
+						return saved;
+					},
+					async set(value) {
+						Object.assign(saved, value);
+					},
+				},
+			},
+		},
+		KrbLocalOsm: {
+			create() {
+				return {
+					async status() {
+						return null;
+					},
+					async close() {},
+				};
+			},
+		},
+		Worker: class {
+			postMessage(message) {
+				messages.push(message);
+			}
+			terminate() {}
+		},
 	});
 	return { elements, messages, confirmations };
 }
