@@ -127,7 +127,7 @@
 				? `Import incomplete: ${message.error}. ${wasUpdate ? "Retry to resume." : "Select the same folder to resume."}`
 				: message.unchanged
 					? "The installed snapshot is up to date."
-					: "Finland data is ready. Refresh an open map to load it.";
+					: "Finland data is ready. Open maps update automatically.";
 			if (message.cleanupWarning) status.textContent += ` ${message.cleanupWarning}`;
 			try {
 				if (wasUpdate)
@@ -199,7 +199,7 @@
 		});
 	});
 	void refresh();
-	status.textContent = "Import a prepared folder or update from the public Finland source.";
+	status.textContent = "Your Finland data date and update status are shown below.";
 	if (bundledTab) start({ type: "bundled" });
 	else if (isAutomaticTab)
 		void api.storage.local.get("localOsmAutoUpdate").then(function (saved) {

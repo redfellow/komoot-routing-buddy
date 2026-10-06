@@ -1,81 +1,44 @@
 # Developer notes
 
-This document contains the technical setup, build, and release information for contributors. The public-facing project overview is in [README.md](README.md).
+See [README.md](README.md) for installation and everyday use.
 
-## Project summary
+## Setup
 
-Komoot Routing Buddy is a browser extension that improves trail readability in Komoot by highlighting route difficulty, adding visual warnings, and preserving user preferences between sessions.
-
-## Requirements
-
-- Node.js 22 or later
-- npm
-- A modern Chrome/Chromium browser and Firefox for validation
-
-## Install and build
+Use Node.js 22+ and npm:
 
 ```sh
 npm ci
 npm test
 npm run build
-npm run lint:firefox
-npm run package
 ```
 
-### Scripts
+Load `dist/chrome` through Chrome/Brave’s extension manager, or `dist/firefox/manifest.json` through Firefox’s temporary add-on page. Code-only builds do not include Finland data; import a prepared folder through **Local Finland data**. See [local data setup](docs/LOCAL-OSM.md).
 
-- `npm test` runs the regression suite.
-- `npm run build` builds the extension files into the `dist/` directory.
-- `npm run lint:firefox` builds the project and lints the Firefox build with warnings treated as errors.
-- `npm run package` runs the tests, lints Firefox, and creates ZIP artifacts directly under `artifacts/`, named `chrome--komoot_routing_buddy-<version>.zip` and `firefox--komoot_routing_buddy-<version>.zip`.
-- `npm run dev:firefox` builds the Firefox extension and launches a Firefox testing session.
+## Commands
 
-## Build notes
+- `npm test`: regression tests, including disposable build checks.
+- `npm run build`: shared code with browser-specific manifests in `dist/`.
+- `npm run lint:firefox`: build and lint Firefox, treating warnings as errors.
+- `npm run dev:firefox`: build and open a temporary Firefox session.
+- `npm run data:release`: prepare and validate current Finland data without building the extension.
+- `npm run package`: fresh data, tests, both builds, Firefox lint and bundled ZIPs. Requires the pinned Python environment; follow [RELEASING.md](docs/RELEASING.md).
 
-- The build copies only approved runtime files and generates the required icons.
-- Shared JavaScript is used across both browser builds.
-- Chrome uses a service worker model; Firefox loads the adapter and background scripts as background scripts.
-- Generated files under `dist/` and unsigned ZIPs under `artifacts/` are not meant to be version-controlled.
-- Rebuild after source changes before testing or publishing.
+Generated builds, archives and country data are ignored by Git. Source-loaded Chrome/Brave extensions can be reloaded directly; generated builds need rebuilding after source changes.
 
-## Browser installation
+## Before sharing changes
 
-### Chrome / Brave
+Check `/plan`, `/tour/<id>/zoom` and `/tour/<id>/edit`: settings, live colour previews, native-style restoration, panel dragging, sidebar persistence and map-layer restoration. Also check local hazards, trail warnings, cancellation/retry and uncovered online fallback. Unrelated pages and route geometry must remain unchanged.
 
-Open `chrome://extensions` or `brave://extensions`, enable Developer mode, and load the generated unpacked build from `dist/chrome`.
+Record the browsers and checks actually tested. Firefox package lint does not substitute for runtime testing; mobile remains unvalidated.
 
-### Firefox
+## Data handling
 
-Open `about:debugging#/runtime/this-firefox`, choose Load Temporary Add-on, and select `dist/firefox/manifest.json`.
+Local matching stays in the browser. Online fallback and deliberate route refresh send area bounds to public Overpass providers. Bulk updates download public Finland extracts from Geofabrik. Firefox’s generated manifest declares `locationInfo` because area bounds can be transmitted. Recheck permissions and privacy text whenever acquisition changes; see [Mozilla’s data-consent guidance](https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/).
 
-The Firefox development setup can also be launched with `npm run dev:firefox`.
+For matching behavior, see [ROUTE-CHECKER.md](docs/ROUTE-CHECKER.md).
 
-## Browser validation checklist
+## Code conventions
 
-Before release, test both browsers on `/plan`, `/tour/<id>/zoom`, and `/tour/<id>/edit`, including:
+Follow [AGENTS.md](AGENTS.md): tabs, double quotes, explicit semicolons, Stroustrup braces (`else`, `catch` and `finally` on the next line), and regular functions for multiline callbacks. CSS uses BEM names. Node scripts and tests use ESM imports with `node:` prefixes.
 
-- settings access from the toolbar and floating cog
-- colour previews and styling changes
-- native styling restoration when visuals are off
-- panel position, expanded state, and persistence after refresh
-- sidebar hide/show behaviour
-- Satellite layer and map-style restoration
-- a check that unrelated pages are unaffected and no route is modified
-
-Document the exact browser versions and results in the release notes.
-
-## Privacy and permissions
-
-The Firefox manifest declares no extension data collection. The extension does not send telemetry or route data to a developer service; preferences use the browser's built-in storage mechanisms. Reassess this declaration if data handling changes.
-
-See the Mozilla data-consent guidance for more detail:
-https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/
-
-## Release notes
-
-- Update the version in `manifest.json` before a release build.
-- Run `npm run package` after the final code changes are in place.
-- Validate the generated packages in a browser before submitting them.
-- Follow the relevant store distribution process for Chrome and Firefox.
-
-For the public-facing release guide, see [docs/RELEASING.md](docs/RELEASING.md).
+Keep comments brief and explain decisions or contracts, rather than restating code. Shared browser scripts intentionally expose classic-script namespaces because content scripts, popups and workers load them without a bundler. Generic formatters may put braces or quotes back into a different style; check their output against AGENTS.md before committing.

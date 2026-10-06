@@ -1,52 +1,123 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Komoot Routing Buddy</title>
-    <link rel="stylesheet" href="popup.css">
-  </head>
-  <body>
-    <main>
-      <h1>Komoot Routing Buddy</h1>
-      <details class="help"><summary aria-label="How to use trail settings">?</summary><p>Choose how each singletrail scale is shown in the Route Planner. Use the colour swatches to customise highlight colours. Drag the colour sliders to preview changes on the map. Changes save automatically; select Done when finished.</p></details>
-      <label class="setting" for="maximumLevel">
-        <span>Maximum trail level to show</span>
-        <select id="maximumLevel">
-          <option value="S0">S0 only</option>
-          <option value="S1">S0–S1</option>
-          <option value="S2">S0–S2</option>
-          <option value="S3">S0–S3</option>
-          <option value="S4">S0–S4</option>
-          <option value="S5">S0–S5 — all marked trails</option>
-        </select>
-      </label>
-      <label class="checkbox-setting"><input id="colourLabels" type="checkbox"> <span>Colour labels</span></label>
-      <div id="rules" aria-label="MTB difficulty rules"></div>
-      <details class="help"><summary aria-label="About avoid rules">?</summary><p><span class="avoid-dot"></span> Avoid marks a level dark red. It is a visual warning, not a routing restriction.</p></details>
-      <label class="checkbox-setting"><input id="showHazards" type="checkbox"> <span>Show hazards</span></label>
-      <details class="help"><summary aria-label="About OSM hazards">?</summary><p>Mapped vegetation, obstacles, mud, warnings and width on OSM-rated S0–S5 trails. Zoom in to load. Buffered map bounds are sent to Private.coffee, VK Maps or overpass-api.de, tried sequentially. Missing data means unknown conditions.</p></details>
-      <label class="setting" for="narrowWarningWidth"><span>Narrow warning <output id="narrowWarningWidthValue" for="narrowWarningWidth">0.4m</output></span><input id="narrowWarningWidth" type="range" min="0.2" max="1" step="0.1" value="0.4"></label>
-      <details class="help"><summary aria-label="About narrow warning width">?</summary><p>Show the narrow icon when the recorded width is at or below this value. Width labels remain visible above the threshold.</p></details>
-      <label class="checkbox-setting"><input id="preloadRouteHazards" type="checkbox"> <span>Preload hazards along route</span></label>
-      <details class="help"><summary aria-label="About preloading hazards">?</summary><p>Cache up to 8 nearby route areas, about 300m around the route. Sends route-area bounds to the OSM providers.</p></details>
-      <label class="checkbox-setting"><input id="rememberLayers" type="checkbox"> <span>Remember layer settings</span></label>
-      <details class="help"><summary aria-label="About remembering layers">?</summary><p>Restore your last selected map type, sport-specific map, and heatmap when the planner opens.</p></details>
-      <label class="checkbox-setting"><input id="squadratsBelowRoads" type="checkbox"> <span>Show Squadrats below roads and trails</span></label>
-      <label class="setting" for="squadratsOpacity">
-        <span>Squadrats opacity <output id="squadratsOpacityValue" for="squadratsOpacity">50%</output></span>
-        <input id="squadratsOpacity" type="range" min="0" max="100" step="1" value="50" aria-describedby="squadratsHint">
-      </label>
-      <details class="help"><summary aria-label="About Squadrats opacity">?</summary><p id="squadratsHint">Fade collected Squadrats fills, borders and grids. New squares use twice the slider value, capped at 100% of their original opacity. Enabled by default at 50%. Requires an active Squadrats overlay; independent of trail visuals.</p></details>
-      <div class="settings__actions">
-        <button id="restore" type="button">Restore suggested rules</button>
-        <button type="button" id="clearOsmCache">Clear OSM cache</button>
-      </div>
-      <p id="status" role="status" aria-live="polite"></p>
-    <p><a href="local-data.html" target="_blank" rel="noopener">Local Finland data</a></p>
-    </main>
-    <script src="browser-api.js"></script>
-    <script src="settings.js"></script>
-    <script src="popup.js"></script>
-  </body>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Komoot Routing Buddy</title>
+		<link rel="stylesheet" href="popup.css" />
+	</head>
+	<body>
+		<main>
+			<h1>Komoot Routing Buddy</h1>
+			<details class="help">
+				<summary aria-label="How to use trail settings">?</summary>
+				<p>
+					Choose which trail levels to highlight. Click a colour to customise it and preview changes
+					on the map. Settings save automatically.
+				</p>
+			</details>
+			<label class="setting" for="maximumLevel">
+				<span>Maximum trail level to show</span>
+				<select id="maximumLevel">
+					<option value="S0">S0 only</option>
+					<option value="S1">S0–S1</option>
+					<option value="S2">S0–S2</option>
+					<option value="S3">S0–S3</option>
+					<option value="S4">S0–S4</option>
+					<option value="S5">S0–S5 — all marked trails</option>
+				</select>
+			</label>
+			<label class="checkbox-setting"
+				><input id="colourLabels" type="checkbox" /> <span>Colour labels</span></label
+			>
+			<div id="rules" aria-label="MTB difficulty rules"></div>
+			<details class="help">
+				<summary aria-label="About avoid rules">?</summary>
+				<p>
+					<span class="avoid-dot"></span> Avoid marks a level dark red. It is a visual warning, not
+					a routing restriction.
+				</p>
+			</details>
+			<label class="checkbox-setting"
+				><input id="showHazards" type="checkbox" /> <span>Show hazards</span></label
+			>
+			<details class="help">
+				<summary aria-label="About OSM hazards">?</summary>
+				<p>
+					Show mapped mud, vegetation, obstacles and trail widths. Zoom in to see details. Finland
+					uses local data; elsewhere, online requests send area bounds to public OSM providers.
+					Missing data means unknown conditions.
+				</p>
+			</details>
+			<label class="setting" for="narrowWarningWidth"
+				><span
+					>Narrow warning
+					<output id="narrowWarningWidthValue" for="narrowWarningWidth">0.4m</output></span
+				><input id="narrowWarningWidth" type="range" min="0.2" max="1" step="0.1" value="0.4"
+			/></label>
+			<details class="help">
+				<summary aria-label="About narrow warning width">?</summary>
+				<p>
+					Show the narrow icon when the recorded width is at or below this value. Width labels
+					remain visible above the threshold.
+				</p>
+			</details>
+			<label class="checkbox-setting"
+				><input id="preloadRouteHazards" type="checkbox" />
+				<span>Preload hazards along route</span></label
+			>
+			<details class="help">
+				<summary aria-label="About preloading hazards">?</summary>
+				<p>
+					Load nearby trail hazards ahead of the map view. Uses local Finland data where available;
+					otherwise sends route-area bounds to public OSM providers.
+				</p>
+			</details>
+			<label class="checkbox-setting"
+				><input id="rememberLayers" type="checkbox" /> <span>Remember layer settings</span></label
+			>
+			<details class="help">
+				<summary aria-label="About remembering layers">?</summary>
+				<p>
+					Restore your last selected map type, sport-specific map, and heatmap when the planner
+					opens.
+				</p>
+			</details>
+			<label class="checkbox-setting"
+				><input id="squadratsBelowRoads" type="checkbox" />
+				<span>Show Squadrats below roads and trails</span></label
+			>
+			<label class="setting" for="squadratsOpacity">
+				<span
+					>Squadrats opacity
+					<output id="squadratsOpacityValue" for="squadratsOpacity">50%</output></span
+				>
+				<input
+					id="squadratsOpacity"
+					type="range"
+					min="0"
+					max="100"
+					step="1"
+					value="50"
+					aria-describedby="squadratsHint"
+				/>
+			</label>
+			<details class="help">
+				<summary aria-label="About Squadrats opacity">?</summary>
+				<p id="squadratsHint">
+					Fade collected squares. New squares stay twice as visible, up to their original opacity.
+					Requires the Squadrats extension.
+				</p>
+			</details>
+			<div class="settings__actions">
+				<button id="restore" type="button">Restore suggested rules</button>
+				<button type="button" id="clearOsmCache">Clear OSM cache</button>
+			</div>
+			<p id="status" role="status" aria-live="polite"></p>
+			<p><a href="local-data.html" target="_blank" rel="noopener">Local Finland data</a></p>
+		</main>
+		<script src="browser-api.js"></script>
+		<script src="settings.js"></script>
+		<script src="popup.js"></script>
+	</body>
 </html>

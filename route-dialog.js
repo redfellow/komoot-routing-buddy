@@ -250,7 +250,8 @@
 			</button>
 			<h2 id="krb-route-title">Check trails along route</h2>
 			<p class="krb-route__help">
-				Checks unpaved trails with an MTB scale. Roads, streets and cycleways are excluded. Unpaved paths without an MTB scale are listed as unknown. MTB-rated paths without a surface tag are assumed unpaved. Unmatched sections and other unknown surfaces are not assessed.
+				Checks MTB-rated, unpaved trails against your limits. Roads, streets, cycleways and paved paths
+				are excluded. Missing data is reported separately; uncertain matches are not checked.
 			</p>
 			<fieldset data-route="preferences">
 				<label>

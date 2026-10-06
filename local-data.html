@@ -1,30 +1,53 @@
 <!doctype html>
 <html lang="en">
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>Local Finland data — Komoot Routing Buddy</title>
-	<link rel="stylesheet" href="popup.css">
-</head>
-<body class="krb-local-data">
-	<main>
-		<h1>Local Finland data</h1>
-		<p>Import a prepared Finland snapshot for hazard overlays and trail checks. Select the folder containing manifest.json and its compressed data files.</p>
-		<p>The current snapshot stays available during import. Keep this tab open until import finishes. After interruption, select the same folder to resume.</p>
-		<label>Prepared snapshot folder <input id="snapshot" type="file" webkitdirectory multiple></label>
-		<label><input id="automatic" type="checkbox" checked> Automatically update Finland data weekly</label>
-		<p>Updates use a temporary background tab. Keep it open while running. The source download is approximately 770 MB; preparation took about seven minutes in desktop Chrome, plus download time.</p>
-		<button id="update" type="button">Update Finland data</button>
-		<button id="cancel" type="button" hidden>Pause update</button>
-		<progress id="progress" max="1" value="0" hidden></progress>
-		<p id="status" role="status" aria-live="polite">Reading local data status…</p>
-		<p id="active"></p>
-		<p id="history"></p>
-		<p>Areas without usable local coverage still use the existing online API. Clearing the OSM API cache does not remove this snapshot.</p>
-		<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors · ODbL</a>
-	</main>
-	<script src="browser-api.js"></script>
-	<script src="local-osm.js"></script>
-	<script src="local-data.js"></script>
-</body>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Local Finland data — Komoot Routing Buddy</title>
+		<link rel="stylesheet" href="popup.css" />
+	</head>
+	<body class="krb-local-data">
+		<main>
+			<h1>Local Finland data</h1>
+			<p>
+				Finland data powers map hazards and trail checks without online OSM requests. Release
+				packages install it automatically.
+			</p>
+			<p>
+				Keep this tab open while importing or updating. Your current data stays available until the
+				new data is ready.
+			</p>
+			<details>
+				<summary>Import a prepared data folder</summary>
+				<p>
+					Select the folder containing manifest.json and its data files. If interrupted, select the
+					same folder to resume.
+				</p>
+				<label>Data folder <input id="snapshot" type="file" webkitdirectory multiple /></label>
+			</details>
+			<label
+				><input id="automatic" type="checkbox" checked /> Automatically update Finland data
+				weekly</label
+			>
+			<p>
+				Updates download roughly 770 MB and take several minutes. Allow several GB of free disk
+				space. You can pause and resume later.
+			</p>
+			<button id="update" type="button">Update Finland data</button>
+			<button id="cancel" type="button" hidden>Pause update</button>
+			<progress id="progress" max="1" value="0" hidden></progress>
+			<p id="status" role="status" aria-live="polite">Reading local data status…</p>
+			<p id="active"></p>
+			<p id="history"></p>
+			<p>
+				Areas without local data use online OSM requests. Clear OSM cache keeps your Finland data.
+			</p>
+			<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer"
+				>© OpenStreetMap contributors · ODbL</a
+			>
+		</main>
+		<script src="browser-api.js"></script>
+		<script src="local-osm.js"></script>
+		<script src="local-data.js"></script>
+	</body>
 </html>
