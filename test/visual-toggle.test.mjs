@@ -232,7 +232,7 @@ function fixture() {
 			rejectMissingLineGapWrites = true;
 		},
 		restyle() {
-			events.idle();
+			events.styledata();
 			flush();
 		},
 	};
@@ -448,6 +448,45 @@ test("rejected line-gap writes do not interrupt trail styling", function () {
 	const writes = f.writes();
 	f.restyle();
 	assert.equal(f.writes(), writes);
+});
+
+test("IMBA trail layers do not switch renderers because of our added difficulty filter", function () {
+	const f = fixture();
+	f.layers[0].layout = { visibility: "none" };
+	f.layers[1].id = "mtb-trails-imba-0-road";
+	f.layers[1].paint["line-width"] = 1;
+	f.configure();
+	const applied = copy(f.layers);
+	const writes = f.writes();
+	for (let index = 0; index < 10; index++) {
+		f.restyle();
+		assert.deepEqual(f.layers, applied);
+		assert.equal(f.writes(), writes, "our filter must not trigger restore/apply cycles");
+	}
+	f.configure({ visualsEnabled: false });
+	assert.deepEqual(f.layers[1].filter, ["has", "mtb_scale_imba"]);
+	assert.deepEqual(f.layers[1].paint, { "line-width": 1 });
+});
+
+test("fallback trail widths settle after idle and style events with an extension gap", function () {
+	const f = fixture();
+	f.layers[0].id = "road-path";
+	f.layers[0].paint["line-width"] = 1;
+	f.layers[2].layout.visibility = "none";
+	f.configure({ trailWidth: 5 });
+	const applied = copy(f.layers);
+	const writes = f.writes();
+	assert.equal(f.layers[0].paint["line-gap-width"], 1);
+	assert.equal(f.events.idle, undefined, "idle must not schedule another styling pass");
+	for (let index = 0; index < 10; index++) {
+		f.events.styledata();
+		f.restyle();
+		assert.deepEqual(f.layers, applied);
+		assert.equal(f.writes(), writes, "settled map events must not restart rendering");
+	}
+	f.configure({ visualsEnabled: false });
+	assert.equal(f.layers[0].paint["line-width"], 1);
+	assert.equal(f.layers[0].paint["line-gap-width"], undefined);
 });
 
 test("labels contrast with their halo while line colours remain unchanged; Off restores halo", function () {

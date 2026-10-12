@@ -1,3 +1,15 @@
+# 1.5.1
+
+## Bug fixes
+
+- Fix high idle CPU usage caused by repeated map styling. Classify trail layers using their original filters so IMBA layers cannot trigger a restore/apply loop.
+- Avoid unnecessary styling after map idle events.
+- Keep widened trail widths stable when Routing Buddy adds its own outline, while preserving native separated strokes.
+
+## Validation
+
+The redraw loop was reproduced in Brave and stopped after the fix: a five-second idle sample recorded no map writes, redraws or style events. Observed tab CPU settled around 16%, down from 70–94% before the fix. Firefox runtime testing remains deferred.
+
 # 1.5.0
 
 ## New

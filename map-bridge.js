@@ -374,7 +374,14 @@
 
 	function hasSeparatedStrokes(id) {
 		return ["line-gap-width", "line-offset"].some(function (property) {
-			return canSeparateStrokes(getPaint(id, property));
+			// Our own gap is a halo, not evidence of native separated strokes.
+			const original = originals.get(id);
+			const current = getPaint(id, property);
+			const value = property === "line-gap-width" &&
+				original && "appliedGap" in original && same(current, original.appliedGap)
+				? original.paint[property]
+				: current;
+			return canSeparateStrokes(value);
 		});
 	}
 
@@ -768,13 +775,22 @@
 			const styleLayers = (map.getStyle()?.layers || []).filter(
 				(layer) => !layer.id.startsWith("krb-conditions"),
 			);
+			function difficultyMetadata(layer) {
+				const original = originals.get(layer.id);
+				// Our filter adds mtb_scale even to fallback/IMBA layers. Using
+				// it for classification would alternate renderers on every pass.
+				const filter = original?.layer === map.getLayer(layer.id)
+					? original.filter
+					: layer.filter;
+				return JSON.stringify([filter, layer.layout]);
+			}
 			// Ignore zoom limits: a selected MTB overlay should retain its native
 			// zoom behaviour rather than falling back to wider paths when zoomed out.
 			const nativeLayers = styleLayers.filter(function (layer) {
 				return (
 					/mtb/i.test(layer.id) &&
 					["line", "symbol"].includes(layer.type) &&
-					JSON.stringify([layer.filter, layer.layout]).includes("\"mtb_scale\"")
+					difficultyMetadata(layer).includes("\"mtb_scale\"")
 				);
 			});
 			// Difficulty labels remain visible even with the sport overlay off.
@@ -788,7 +804,7 @@
 							(!nativeLayers.includes(layer) || layer.type === "symbol") &&
 							["line", "symbol"].includes(layer.type) &&
 							(/"(mtb_scale|sac_scale|trail_difficulty)"/.test(
-								JSON.stringify([layer.filter, layer.layout]),
+								difficultyMetadata(layer),
 							) ||
 								/(path|track|footway|cycleway|trail|steps)/i.test(layer.id))
 						);
@@ -938,6 +954,7 @@
 					if (!preserveWidth) {
 						if (setPaint(layer.id, "line-gap-color", satellite ? "rgba(0,0,0,0)" : "#000000")) {
 							setPaint(layer.id, "line-gap-width", satellite ? 0 : 1);
+							original.appliedGap = structuredClone(getPaint(layer.id, "line-gap-width"));
 						}
 					}
 				}
@@ -1259,7 +1276,6 @@
 			checkedRouteKey = undefined;
 			clearRouteHighlight();
 			map.off("styledata", scheduleApply);
-			map.off("idle", scheduleApply);
 			map.off("sourcedata", onSquadratsSource);
 			map.off("sourcedata", onRoutePreloadSource);
 			map.off("moveend", scheduleRoutePreload);
@@ -1291,7 +1307,8 @@
 		map = found;
 
 		map.on("styledata", scheduleApply);
-		map.on("idle", scheduleApply);
+		// Idle also fires after panning and our own paint transitions. Style
+		// changes already notify us through styledata; do not restyle every idle.
 		map.on("sourcedata", onSquadratsSource);
 		map.on("sourcedata", onRoutePreloadSource);
 		map.on("moveend", scheduleRoutePreload);
