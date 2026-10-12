@@ -29,7 +29,7 @@
 		}
 		async function manifest() {
 			if (!enabled) return undefined;
-			const data = await bytes("manifest.json", 8 * 1024 * 1024);
+			const data = await bytes("snapshot.json", 8 * 1024 * 1024);
 			if (!data) return undefined;
 			const parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(data));
 			KrbLocalOsm.validateManifest(parsed);

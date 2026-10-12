@@ -72,7 +72,7 @@ test("new install imports bundled compressed data without contacting an online p
 			base: "extension://data/finland/",
 			async fetcher(path) {
 				calls.push(path);
-				return new Response(path.endsWith("manifest.json") ? JSON.stringify(f.manifest) : f.bytes);
+				return new Response(path.endsWith("snapshot.json") ? JSON.stringify(f.manifest) : f.bytes);
 			},
 		}),
 		store = f.context.KrbLocalOsm.create();
@@ -93,7 +93,7 @@ test("interrupted/corrupt bundled install retains prior snapshot and missing bun
 		broken = f.context.KrbBundledOsm.create({
 			async fetcher(path) {
 				return new Response(
-					path.endsWith("manifest.json") ? JSON.stringify(next) : new Uint8Array(f.bytes.length),
+					path.endsWith("snapshot.json") ? JSON.stringify(next) : new Uint8Array(f.bytes.length),
 				);
 			},
 		});
@@ -135,7 +135,7 @@ test("interrupted first installation resumes validated bundled shards without do
 		firstReads = 0;
 	const bundle = f.context.KrbBundledOsm.create({
 			async fetcher(path) {
-				if (path.endsWith("manifest.json")) return new Response(JSON.stringify(f.manifest));
+				if (path.endsWith("snapshot.json")) return new Response(JSON.stringify(f.manifest));
 				if (path.endsWith("96_244.ndjson.gz")) {
 					firstReads++;
 					return new Response(f.bytes);

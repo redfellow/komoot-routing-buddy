@@ -1,3 +1,9 @@
+# 1.5.2
+
+- Fix Chrome Web Store upload rejection by packaging Finland metadata as `snapshot.json`, leaving only the extension manifest named `manifest.json`.
+- Add an offline privacy policy, correct browser synchronization disclosures, and identify online OSM recipients in settings and trail checks.
+- Clarify automatic country downloads and explicit route-refresh data sharing.
+
 # 1.5.1
 
 ## Bug fixes

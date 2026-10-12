@@ -97,7 +97,7 @@ async function scan(directory, entry, visit) {
 }
 export async function validateSnapshot(directory, options = {}) {
 	directory = resolve(directory);
-	const path = join(directory, "manifest.json");
+	const path = join(directory, options.manifestFile || "manifest.json");
 	if ((await stat(path)).size > 8 * 1024 * 1024)
 		throw new SnapshotValidationError("Oversized snapshot manifest");
 	const manifest = JSON.parse(await readFile(path, "utf8"));

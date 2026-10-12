@@ -5,6 +5,38 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build, runtimeFiles } from "../scripts/build.mjs";
 
+test("bundled packages contain only the extension manifest and load renamed snapshot metadata", async function () {
+	const directory = await mkdtemp(join(tmpdir(), "krb-store-build-"));
+	try {
+		const manifest = {
+			source: { url: "https://download.geofabrik.de/europe/finland-261011.osm.pbf" },
+			snapshotAt: "2026-10-11T20:21:06Z",
+			shards: [],
+		};
+		await writeFile(join(directory, "manifest.json"), JSON.stringify(manifest));
+		const output = join(directory, "output");
+		await build(output, { snapshot: { directory, manifest } });
+		async function manifests(path) {
+			const found = [];
+			for (const entry of await readdir(path, { withFileTypes: true })) {
+				if (entry.isDirectory()) found.push(...await manifests(join(path, entry.name)));
+				else if (entry.name.toLowerCase() === "manifest.json") found.push(join(path, entry.name));
+			}
+			return found;
+		}
+		for (const browser of ["chrome", "firefox"]) {
+			const root = join(output, browser);
+			assert.deepEqual(await manifests(root), [join(root, "manifest.json")]);
+			assert.deepEqual(JSON.parse(await readFile(join(root, "data/finland/snapshot.json"))), manifest);
+			assert.match(await readFile(join(root, "bundled-osm.js"), "utf8"), /bytes\("snapshot\.json"/);
+			assert.ok((await readFile(join(root, "privacy.html"))).length > 0);
+		}
+	}
+	finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("browser builds share runtime code, select the right background and exclude local files", async function () {
 	const directory = await mkdtemp(join(tmpdir(), "krb-build-"));
 	try {

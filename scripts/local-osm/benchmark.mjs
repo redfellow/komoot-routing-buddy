@@ -57,7 +57,7 @@ const server = createServer(async function (req, res) {
 			return;
 		}
 		let path;
-		if (["/manifest.json", "/data/manifest.json"].includes(req.url))
+		if (["/manifest.json", "/data/snapshot.json"].includes(req.url))
 			path = join(data, "manifest.json");
 		else if (req.url.startsWith("/data/") && allowed.has(req.url.slice(6)))
 			path = join(data, req.url.slice(6));

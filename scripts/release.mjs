@@ -36,7 +36,10 @@ export async function packageRelease() {
 	const snapshot = await releaseSelection(root, options);
 	await build(join(root, "dist"), { snapshot });
 	for (const browser of ["chrome", "firefox"])
-		await validateSnapshot(join(root, "dist", browser, "data", "finland"), options);
+		await validateSnapshot(join(root, "dist", browser, "data", "finland"), {
+			...options,
+			manifestFile: "snapshot.json",
+		});
 	await webExt(["lint", "--source-dir", "dist/firefox", "--warnings-as-errors"]);
 	const temporary = await mkdtemp(join(tmpdir(), "krb-release-"));
 	let publication;

@@ -42,7 +42,7 @@ export function bundledFiles(snapshot) {
 		function (file) {
 			return {
 				source: join(snapshot.directory, file),
-				target: join("data", "finland", file),
+				target: join("data", "finland", file === "manifest.json" ? "snapshot.json" : file),
 			};
 		},
 	);
