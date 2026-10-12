@@ -50,7 +50,11 @@ Open **Local Finland data** in settings to see the data date or update it. Weekl
 
 Trail conditions come from OpenStreetMap and may be missing or outdated; this is not live reporting or a guarantee of suitability. Data is [© OpenStreetMap contributors, ODbL](https://www.openstreetmap.org/copyright).
 
-Preferences, country data and route matching stay in your browser. There is no analytics or upload to a project-operated server. Geofabrik supplies public Finland downloads. Overpass providers (Private.coffee, VK Maps and overpass-api.de) receive map or route-area bounds when online data is needed, along with normal network information such as your IP address. **Show hazards** controls map overlays; explicit trail checks and country updates have separate controls.
+Country data and route matching stay in your browser. Preferences use browser sync storage: when Chrome Sync is enabled, Google synchronizes trail colours, rules, map options and trail-check preferences across your signed-in browsers. There is no analytics or upload to a project-operated server.
+
+**Show hazards is on by default.** Outside local data coverage, viewing the map or checking trails sends map or route-area bounds to Overpass providers (Private.coffee, VK Maps and overpass-api.de), along with normal network information such as your IP address. Explicit route refresh also sends route-area bounds. Geofabrik receives public Finland download requests, not route geometry. Weekly country updates are on by default and download roughly 770 MB. You can turn off **Show hazards** and automatic country updates separately.
+
+Read the [privacy policy](PRIVACY.md) before installing. Komoot Routing Buddy's use of user data complies with the Chrome Web Store User Data Policy, including the Limited Use requirements. This is an independent project, not affiliated with or endorsed by Komoot.
 
 ## Preview
 

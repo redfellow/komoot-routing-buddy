@@ -253,6 +253,11 @@
 				Checks MTB-rated, unpaved trails against your limits. Roads, streets, cycleways and paved paths
 				are excluded. Missing data is reported separately; uncertain matches are not checked.
 			</p>
+			<p class="krb-route__help">
+				Outside local coverage, checks send route-area bounds and your IP address to Private.coffee,
+				VK Maps or overpass-api.de. Updating from OSM sends bounds even inside local coverage.
+				Your check preferences may sync through your browser account.
+			</p>
 			<fieldset data-route="preferences">
 				<label>
 					Maximum trail level
@@ -342,7 +347,7 @@
 			field("refresh").addEventListener("click", function () {
 				if (
 					!window.confirm(
-						"Update OSM data along the entire current route? Online requests may take several minutes or longer and can pause on timeouts. Successful areas are kept for seven days. Continue?",
+						"Send current route-area bounds to Private.coffee, VK Maps or overpass-api.de to update OSM data? These providers also receive your IP address. Requests may take several minutes or longer and can pause on timeouts. Successful areas are kept for seven days. Continue?",
 					)
 				)
 					return;

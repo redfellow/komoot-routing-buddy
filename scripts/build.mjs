@@ -31,6 +31,7 @@ export const runtimeFiles = [
 	"map-bridge.js",
 	"planner.css",
 	"popup.html",
+	"privacy.html",
 	"popup.css",
 	"popup.js",
 ];
