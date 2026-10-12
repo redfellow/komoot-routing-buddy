@@ -385,6 +385,19 @@
 		});
 	}
 
+	function isTrackLayer(id) {
+		return /(?:^|[-_])tracks?(?:$|[-_])/i.test(id);
+	}
+
+	function preserveTrackWidth(base, widened) {
+		return [
+			"case",
+			["any", ["==", ["get", "highway"], "track"], ["==", ["get", "class"], "track"]],
+			base,
+			widened,
+		];
+	}
+
 	const hazardIconUrl = document.currentScript?.dataset.hazardIcons;
 	const hazardCategories = ["mud", "vegetation", "narrow", "other", "log"];
 	let hazardIconAtlas;
@@ -934,9 +947,9 @@
 						);
 					}
 				}
-				// Widen simple trails without distorting casings or parallel strokes.
+				// Keep tracks at Komoot's native zoom-dependent width; widen single trails only.
 				if (layer.type === "line" && !nativeMtb) {
-					const preserveWidth = hasSeparatedStrokes(layer.id);
+					const preserveWidth = hasSeparatedStrokes(layer.id) || isTrackLayer(layer.id);
 					const targetWidth = config.trailWidth || 4; //enforcing fallback just in case.
 					const effectiveWidth = satellite ? targetWidth : Math.max(1, targetWidth - 1);
 					const width = transformStops(
@@ -944,7 +957,7 @@
 						function (base) {
 							const expression = ["match", level];
 							for (let index = 0; index <= 5; index++)
-								expression.push(index, ["max", base, effectiveWidth]);
+								expression.push(index, preserveTrackWidth(base, ["max", base, effectiveWidth]));
 							expression.push(base);
 							return expression;
 						},
@@ -953,7 +966,15 @@
 					setPaint(layer.id, "line-width", preserveWidth ? original.paint["line-width"] : width);
 					if (!preserveWidth) {
 						if (setPaint(layer.id, "line-gap-color", satellite ? "rgba(0,0,0,0)" : "#000000")) {
-							setPaint(layer.id, "line-gap-width", satellite ? 0 : 1);
+							setPaint(
+								layer.id,
+								"line-gap-width",
+								transformStops(
+									original.paint["line-gap-width"],
+									(base) => preserveTrackWidth(base, satellite ? 0 : 1),
+									0,
+								),
+							);
 							original.appliedGap = structuredClone(getPaint(layer.id, "line-gap-width"));
 						}
 					}

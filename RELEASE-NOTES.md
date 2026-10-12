@@ -1,3 +1,7 @@
+# 1.6.0 (unreleased)
+
+- Keep doubletrack layers and features tagged as tracks at Komoot’s native zoom-dependent line widths, without the extra fallback outline. Singletrack highlighting retains its existing widths.
+
 # 1.5.2
 
 - Fix Chrome Web Store upload rejection by packaging Finland metadata as `snapshot.json`, leaving only the extension manifest named `manifest.json`.

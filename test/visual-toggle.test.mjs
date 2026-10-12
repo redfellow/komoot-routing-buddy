@@ -261,6 +261,12 @@ function evaluate(expression, properties) {
 			return args[0] in properties;
 		case "to-string":
 			return String(ev(args[0]));
+		case "case": {
+			for (let i = 0; i < args.length - 1; i += 2) {
+				if (ev(args[i])) return ev(args[i + 1]);
+			}
+			return ev(args.at(-1));
+		}
 		case "match": {
 			const input = ev(args[0]);
 			for (let i = 1; i < args.length - 1; i += 2) {
@@ -476,7 +482,7 @@ test("fallback trail widths settle after idle and style events with an extension
 	f.configure({ trailWidth: 5 });
 	const applied = copy(f.layers);
 	const writes = f.writes();
-	assert.equal(f.layers[0].paint["line-gap-width"], 1);
+	assert.equal(evaluate(f.layers[0].paint["line-gap-width"], {}), 1);
 	assert.equal(f.events.idle, undefined, "idle must not schedule another styling pass");
 	for (let index = 0; index < 10; index++) {
 		f.events.styledata();
@@ -674,11 +680,56 @@ test("base paths work without MTB layers and switch when the overlay is added or
 	assert.deepEqual(path, baseline);
 	f.layers.splice(1);
 	f.restyle();
-	assert.equal(evaluate(path.paint["line-width"], { mtb_scale: "0" }), 3);
-	assert.equal(path.paint["line-gap-width"], 1);
-	assert.equal(path.paint["line-gap-color"], "#000000");
+	assert.equal(path.paint["line-width"], 2);
+	assert.equal(path.paint["line-gap-width"], undefined);
+	assert.equal(path.paint["line-gap-color"], undefined);
 	f.configure({ visualsEnabled: false });
 	assert.deepEqual(path, baseline);
+});
+
+test("tracks retain native zoom widths while mixed layers still widen singletracks", function () {
+	const f = fixture();
+	f.layers.splice(0);
+	const nativeWidth = { stops: [[10, 0.6], [14, 1.2], [18, 3]] };
+	const track = {
+		id: "road-track",
+		type: "line",
+		filter: null,
+		paint: { "line-width": copy(nativeWidth), "line-color": "#777777" },
+	};
+	const mixed = {
+		id: "path",
+		type: "line",
+		filter: null,
+		paint: { "line-width": copy(nativeWidth), "line-color": "#777777" },
+	};
+	f.layers.push(track, mixed);
+	const baseline = copy(f.layers);
+	f.configure();
+	assert.deepEqual(track.paint["line-width"], nativeWidth);
+	assert.equal(track.paint["line-gap-width"], undefined);
+	for (const [index, [, width]] of nativeWidth.stops.entries()) {
+		for (const properties of [{ highway: "track" }, { class: "track" }]) {
+			assert.equal(evaluate(mixed.paint["line-width"][4 + index * 2], { mtb_scale: "1", ...properties }), width);
+			assert.equal(evaluate(mixed.paint["line-gap-width"], properties), 0);
+		}
+		assert.equal(evaluate(mixed.paint["line-width"][4 + index * 2], { mtb_scale: "1", highway: "path" }), Math.max(width, 3));
+	}
+	assert.equal(evaluate(mixed.paint["line-gap-width"], { highway: "path" }), 1);
+	const writes = f.writes();
+	f.restyle();
+	assert.equal(f.writes(), writes);
+	f.layers.push({ id: "satellite", type: "raster", layout: { visibility: "visible" } });
+	f.restyle();
+	assert.deepEqual(track.paint["line-width"], nativeWidth);
+	for (const [index, [, width]] of nativeWidth.stops.entries()) {
+		assert.equal(evaluate(mixed.paint["line-width"][4 + index * 2], { mtb_scale: "1", highway: "track" }), width);
+		assert.equal(evaluate(mixed.paint["line-width"][4 + index * 2], { mtb_scale: "1", highway: "path" }), Math.max(width, 4));
+	}
+	assert.equal(evaluate(mixed.paint["line-gap-width"], { highway: "track" }), 0);
+	f.layers.pop();
+	f.configure({ visualsEnabled: false });
+	assert.deepEqual(f.layers, baseline);
 });
 
 test("fallback preserves double-line widths while widening ordinary trails", function () {
