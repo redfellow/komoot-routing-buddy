@@ -33,6 +33,8 @@ Keep OSM attribution and the derived database's ODbL notice in both outputs. Geo
 
 Review the final code, permissions and data/license files. Attach the reviewed ZIPs to the intended release destination only when publishing is authorized. If Firefox signing is needed, obtain and distribute the signed copy through the chosen self-distribution channel; do not imply an unsigned ZIP is a permanent stable-Firefox install.
 
+For Chrome Web Store submission, follow [the submission text and checklist](CHROME-STORE-SUBMISSION.md). Publish [the privacy policy](../PRIVACY.md), keep it consistent with packaged `privacy.html`, and verify the policy URL and pre-install disclosures in the final Store listing. Browser sync can synchronize preferences; do not describe all preferences as local-only.
+
 ## 1.5.0 preparation
 
 Verified on 2026-10-06: 196 Node tests, seven native-data tests, JavaScript convention checks and Firefox lint pass. Both ZIPs are about 150 MB, include the October 4 Finland extract and pass checksum/content validation. The provider's latest-source identity was rechecked before handover.

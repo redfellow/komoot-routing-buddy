@@ -23,7 +23,7 @@ Allow several GB of temporary disk space: raw PBF, node-location state, uncompre
 
 ## Version 1 data contract
 
-`manifest.json` contains:
+`manifest.json` contains (release packages rename this data metadata to `data/finland/snapshot.json` so the Chrome Web Store sees only one extension manifest):
 
 - Schema version, region, OSM snapshot timestamp and replication sequence.
 - Source URL, size, provider MD5 and SHA-256; polygon checksum.
