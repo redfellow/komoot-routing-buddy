@@ -1,0 +1,22 @@
+{
+  "version": "1.6.0",
+  "sourceCommit": "bd3460c48019961fabf965340758196dabd13fa8",
+  "zip": "chrome--komoot-routing-buddy-1.6.0.zip",
+  "bytes": 149850265,
+  "sha256": "f20eb2dcad463da695555cd581461350bc104098355c9045d333b3651a79e5d3",
+  "manifestEntries": [
+    "manifest.json"
+  ],
+  "snapshotAt": "2026-10-13T20:21:31Z",
+  "shards": 1178,
+  "javascriptTests": 287,
+  "localDataTests": 7,
+  "lint": {
+    "errors": 0,
+    "warnings": 0,
+    "notices": 0
+  },
+  "archiveCRC": "passed",
+  "builtFileComparison": "passed",
+  "runtimeSmokeTest": "Current source exercised in Komoot; final ZIP not installed for a fresh browser smoke test."
+}
