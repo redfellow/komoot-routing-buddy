@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Komoot Routing Buddy",
 	"version": "1.5.2",
-	"description": "Colour MTB trails, show mapped hazards and check the trails along your Komoot route.",
+	"description": "Colour MTB trails, analyse terrain and climbs, check mapped hazards, and add approved route POIs in Komoot.",
 	"permissions": ["storage", "unlimitedStorage", "declarativeNetRequestWithHostAccess", "alarms"],
 	"action": {
 		"default_title": "Komoot Routing Buddy",
@@ -28,6 +28,10 @@
 				"settings.js",
 				"sidebar.js",
 				"route-check.js",
+				"ride-overview.js",
+				"komoot-poi-data.js",
+				"komoot-pois.js",
+				"ride-dialog.js",
 				"route-dialog.js",
 				"content.js"
 			],
@@ -37,7 +41,7 @@
 	],
 	"web_accessible_resources": [
 		{
-			"resources": ["map-bridge.js", "hazard-icons.png", "popup.html"],
+			"resources": ["map-bridge.js", "komoot-poi-insert.js", "hazard-icons.png", "popup.html"],
 			"matches": ["https://www.komoot.com/*"]
 		}
 	],

@@ -23,7 +23,12 @@
 
 	function installMapBridge() {
 		if (document.querySelector("#krb-map-bridge")) return;
+		const insertion = document.createElement("script");
+		insertion.src = globalThis.KrbBrowser.runtime.getURL("komoot-poi-insert.js");
+		insertion.async = false;
+		(document.head || document.documentElement).append(insertion);
 		const script = document.createElement("script");
+		script.async = false;
 		script.id = "krb-map-bridge";
 		script.dataset.hazardIcons = globalThis.KrbBrowser.runtime.getURL("hazard-icons.png");
 		script.src = globalThis.KrbBrowser.runtime.getURL("map-bridge.js");
@@ -233,7 +238,7 @@
 					<i></i>
 					<i></i>
 				</span>
-				<span class="krb-panel__title"></span>
+				<span class="krb-panel__title"><span class="krb-panel__title--compact">KRB</span><span class="krb-panel__title--expanded">Routing Buddy</span></span>
 				<span
 					class="krb-panel__osm"
 					role="status"
@@ -250,27 +255,31 @@
 					class="krb-panel__toggle"
 					role="switch"
 					aria-checked="true"
-					aria-label="Trail visual changes"
-					title="Toggle trail visual changes"
+					aria-label="Trail colours"
+					title="Toggle trail colours"
 				>
 					On
 				</button>
+				<span class="krb-panel__tools"></span>
+				<span class="krb-panel__caret" aria-hidden="true">⌄</span>
+			</summary>
+			<div class="krb-panel__legend"></div>
+			<div class="krb-panel__hazards" hidden></div>
+			<div class="krb-panel__footer">
 				<button
 					type="button"
 					class="krb-panel__settings"
 					aria-label="Open Routing Buddy settings"
 					title="Open settings"
 				>
-					⚙
+					Settings
 				</button>
-				<span class="krb-panel__caret">⌃</span>
-			</summary>
-			<div class="krb-panel__legend"></div>
+			</div>
 		`;
 		document.documentElement.append(panel);
 		updatePanelReadiness();
 		setupPanelControls(panel, state || {});
-		globalThis.KrbRouteDialog?.attach(panel);
+		globalThis.KrbRideDialog?.attach(panel);
 		setupOsmTooltip(panel);
 		renderHazardStatus(latestHazardStatus || { state: "loading", text: "Connecting to OSM map…" });
 	}

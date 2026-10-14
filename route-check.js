@@ -233,8 +233,7 @@
 		return "unknown";
 	}
 	// Keep ambiguous matches unknown rather than reporting a nearby trail as traversed.
-	function analyse(route, features, options) {
-		options = preferences(options);
+	function matchRoute(route, features) {
 		const routeSamples = samples(route);
 		const unique = new Map(features.map((f) => [f.id || f.properties?.osmId, f]));
 		const ways = [...unique.values()].filter((f) => f.geometry?.type === "LineString");
@@ -314,6 +313,11 @@
 				for (let j = i; j < end; j++) matches[j].way = undefined;
 			i = end;
 		}
+		return { routeSamples, matches, unique };
+	}
+	function analyse(route, features, options) {
+		options = preferences(options);
+		const { routeSamples, matches, unique } = matchRoute(route, features);
 		let checkedDistance = 0;
 		const warnings = [],
 			unknown = { unmatched: 0, rating: 0, width: 0, surface: 0 };
@@ -634,6 +638,8 @@
 		samples,
 		areas,
 		groupWarnings,
+		matchRoute,
+		trailSurface,
 		analyse,
 		collect,
 		collectWithRetry,

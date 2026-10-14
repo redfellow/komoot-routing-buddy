@@ -5,10 +5,11 @@ import { runInNewContext } from "node:vm";
 function fixture(load) {
 	const fields = {},
 		messages = [],
+		checkResults = [],
+		states = [],
 		listeners = [],
 		timers = new Map();
 	let dialog,
-		trigger,
 		sequence = 0,
 		now = 1000000;
 	function element() {
@@ -103,20 +104,14 @@ function fixture(load) {
 	};
 	for (const file of ["route-check.js", "route-dialog.js"])
 		runInNewContext(readFileSync(new URL(`../${file}`, import.meta.url), "utf8"), context);
-	context.KrbRouteDialog.attach({
-		getBoundingClientRect() {
-			return { right: 500, bottom: 80 };
-		},
-		querySelector() {
-			return {
-				before(node) {
-					trigger = node;
-				},
-			};
-		},
-	});
+
 	return {
 		fields,
+		start: () => context.KrbRouteDialog.start(),
+		checkResults,
+		states,
+		cancel: () => context.KrbRouteDialog.cancel(),
+		pause: (value) => context.KrbRouteDialog.setPaused(value),
 		messages,
 		tick(milliseconds) {
 			now += milliseconds;
@@ -130,7 +125,7 @@ function fixture(load) {
 			return dialog;
 		},
 		async open() {
-			await trigger.click();
+			await context.KrbRouteDialog.mount({ append(node) { dialog = node; } }, (value) => checkResults.push(value), (value) => states.push(value));
 		},
 		receive(data) {
 			for (const fn of listeners) fn({ source: window, origin: "https://www.komoot.com", data });
@@ -173,7 +168,7 @@ test("dialog defaults, completed check, clickable results and route invalidation
 	);
 	assert.equal(f.fields.width.value, "0.4");
 	assert.equal(f.fields.hazards.checked, false);
-	f.fields.start.click();
+	f.start();
 	const request = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
 	f.receive({
 		type: "KRB_ROUTE_SNAPSHOT_DATA",
@@ -182,8 +177,10 @@ test("dialog defaults, completed check, clickable results and route invalidation
 		routeKey: "test-route",
 	});
 	await flush();
-	assert.equal(f.fields.start.disabled, false);
+	assert.equal(f.fields.retry.disabled, false);
 	assert.match(f.fields.status.textContent, /1 trail warning/);
+	assert.equal(f.checkResults[0].routeKey, "test-route");
+	assert.equal(f.checkResults[0].features[0].properties.trailRating, "S2");
 	f.fields.results.children[0].children[0].click();
 	assert.equal(f.messages.at(-1).type, "KRB_ROUTE_FOCUS");
 	f.receive({ type: "KRB_ROUTE_CHANGED" });
@@ -199,7 +196,7 @@ test("cancel ignores late data and retry shows incomplete errors", async functio
 		});
 	});
 	await f.open();
-	f.fields.start.click();
+	f.start();
 	const request = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
 	f.receive({
 		type: "KRB_ROUTE_SNAPSHOT_DATA",
@@ -212,8 +209,8 @@ test("cancel ignores late data and retry shows incomplete errors", async functio
 	finish({ data: { type: "FeatureCollection", features: [] } });
 	await flush();
 	assert.match(f.fields.status.textContent, /cancelled/);
-	assert.equal(f.fields.start.textContent, "Retry");
-	f.fields.start.click();
+	assert.equal(f.fields.retry.textContent, "Retry check");
+	f.start();
 	const retry = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
 	f.receive({
 		type: "KRB_ROUTE_SNAPSHOT_DATA",
@@ -225,13 +222,13 @@ test("cancel ignores late data and retry shows incomplete errors", async functio
 	finish({ error: "HTTP 429", retryMs: 30000, permanent: true });
 	await flush();
 	assert.match(f.fields.status.textContent, /Trail check incomplete.*429.*30s/);
-	assert.equal(f.fields.start.textContent, "Retry");
+	assert.equal(f.fields.retry.textContent, "Retry check");
 });
 
 test("completed check uses requested wording and keeps unknown information visible", async function () {
 	const f = fixture(async () => ({ data: { type: "FeatureCollection", features: [] } }));
 	await f.open();
-	f.fields.start.click();
+	f.start();
 	const request = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
 	f.receive({
 		type: "KRB_ROUTE_SNAPSHOT_DATA",
@@ -242,7 +239,7 @@ test("completed check uses requested wording and keeps unknown information visib
 	await flush();
 	assert.equal(
 		f.fields.status.textContent,
-		"No MTB-rated unpaved trails were identified on this route.",
+		"No matched MTB-rated OSM trails to assess.",
 	);
 	assert.equal(f.fields.progress.hidden, true);
 	assert.equal(f.fields.unknown.textContent, "");
@@ -267,7 +264,7 @@ test("Retry keeps the dialog's completed-area checkpoint", async function () {
 		return { data: { type: "FeatureCollection", features: [] } };
 	});
 	await f.open();
-	f.fields.start.click();
+	f.start();
 	let request = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
 	f.receive({
 		type: "KRB_ROUTE_SNAPSHOT_DATA",
@@ -276,10 +273,10 @@ test("Retry keeps the dialog's completed-area checkpoint", async function () {
 		routeKey: "long",
 	});
 	await flush();
-	assert.equal(f.fields.start.textContent, "Retry");
+	assert.equal(f.fields.retry.textContent, "Retry check");
 	assert.equal(requested.length, 2);
 	fail = false;
-	f.fields.start.click();
+	f.start();
 	request = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
 	f.receive({
 		type: "KRB_ROUTE_SNAPSHOT_DATA",
@@ -290,13 +287,13 @@ test("Retry keeps the dialog's completed-area checkpoint", async function () {
 	await flush();
 	assert.equal(requested[2], requested[1]);
 	assert.equal(requested.filter((value) => value === requested[0]).length, 1);
-	assert.equal(f.fields.start.textContent, "Check trails");
+	assert.equal(f.fields.retry.hidden, true);
 });
 
 test("temporary failures keep the dialog running with an automatic retry and Cancel", async function () {
 	const f = fixture(async () => ({ error: "HTTP 429", retryMs: 60000 }));
 	await f.open();
-	f.fields.start.click();
+	f.start();
 	const request = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
 	f.receive({
 		type: "KRB_ROUTE_SNAPSHOT_DATA",
@@ -309,12 +306,12 @@ test("temporary failures keep the dialog running with an automatic retry and Can
 	f.tick(1000);
 	assert.match(f.fields.activity.textContent, /retrying automatically in 59s/);
 	assert.equal(f.fields.progress.hidden, false);
-	assert.equal(f.fields.start.disabled, true);
+	assert.equal(f.fields.retry.disabled, true);
 	assert.equal(f.fields.cancel.hidden, false);
 	f.fields.cancel.click();
 	await flush();
 	assert.match(f.fields.status.textContent, /cancelled/);
-	assert.equal(f.fields.start.disabled, false);
+	assert.equal(f.fields.retry.disabled, false);
 });
 
 test("progress fills only for completed areas and stops on cancellation", async function () {
@@ -330,7 +327,7 @@ test("progress fills only for completed areas and stops on cancellation", async 
 		});
 	});
 	await f.open();
-	f.fields.start.click();
+	f.start();
 	const request = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
 	const long = {
 		...route,
@@ -365,7 +362,7 @@ test("progress fills only for completed areas and stops on cancellation", async 
 	assert.match(f.fields.status.textContent, /cancelled/);
 });
 
-test("manual refresh confirms current-route scope, bypasses local lookup and keeps refresh mode on Retry", async function () {
+test("manual refresh uses current-route scope, bypasses local lookup and keeps refresh mode on Retry", async function () {
 	const requests = [];
 	const f = fixture(async function (message) {
 		requests.push(message);
@@ -383,7 +380,7 @@ test("manual refresh confirms current-route scope, bypasses local lookup and kee
 	await flush();
 	assert.ok(requests.length);
 	assert.ok(requests.every((r) => r.refresh === true));
-	f.fields.start.click();
+	f.start();
 	const retry = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
 	f.receive({
 		type: "KRB_ROUTE_SNAPSHOT_DATA",
@@ -398,7 +395,7 @@ test("manual refresh confirms current-route scope, bypasses local lookup and kee
 test("a new regional snapshot invalidates displayed trail results before they can be reused", async function () {
 	const f = fixture(async () => ({ data: { type: "FeatureCollection", features: [] } }));
 	await f.open();
-	f.fields.start.click();
+	f.start();
 	const request = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
 	f.receive({
 		type: "KRB_ROUTE_SNAPSHOT_DATA",
@@ -408,6 +405,76 @@ test("a new regional snapshot invalidates displayed trail results before they ca
 	});
 	await flush();
 	f.receive({ type: "KRB_OSM_DATA_UPDATED" });
-	assert.equal(f.fields.status.textContent, "OSM data updated — check trails again.");
+	assert.equal(f.fields.status.textContent, "OSM data updated — reanalyse to update trail checks.");
 	assert.equal(f.fields.results.children.length, 0);
+});
+
+
+test("closing the host cancels a running inline check and ignores its late response", async function () {
+	let finish;
+	const f = fixture(function () { return new Promise(function (resolve) { finish = resolve; }); });
+	await f.open();
+	f.start();
+	const request = f.messages.findLast((m) => m.type === "KRB_ROUTE_SNAPSHOT");
+	f.receive({ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: request.requestId, route, routeKey: "test" });
+	await flush();
+	f.cancel();
+	finish({ data: { type: "FeatureCollection", features: [] } });
+	await flush();
+	assert.match(f.fields.status.textContent, /cancelled/);
+	assert.equal(f.fields.retry.textContent, "Retry check");
+	assert.equal(f.fields.results.children.length, 0);
+	assert.equal(f.messages.at(-1).active, false);
+	assert.equal(f.checkResults.length, 0);
+});
+
+
+test("paused inline checks cannot start or refresh while native POIs are being inserted", async function () {
+	const f = fixture(async () => ({ data: { type: "FeatureCollection", features: [] } }));
+	await f.open();
+	f.pause(true);
+	assert.equal(f.fields.retry.disabled, true);
+	assert.equal(f.fields.preferences.disabled, true);
+	f.start();
+	f.fields.refresh.click();
+	assert.equal(f.messages.length, 0);
+	f.pause(false);
+	assert.equal(f.fields.retry.disabled, false);
+	assert.equal(f.fields.preferences.disabled, false);
+});
+
+
+test("trail stage notifications distinguish reading, progress, completion and invalidation", async function () {
+	const f = fixture(async () => ({ data: { type: "FeatureCollection", features: [] } }));
+	await f.open();
+	assert.equal(f.states.at(-1).phase, "idle");
+	f.start();
+	assert.equal(f.states.at(-1).phase, "reading");
+	const request = f.messages.findLast((message) => message.type === "KRB_ROUTE_SNAPSHOT");
+	f.receive({ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: request.requestId, route, routeKey: "test" });
+	await flush();
+	assert.ok(f.states.some((state) => state.phase === "checking"));
+	assert.equal(f.states.at(-1).phase, "ready");
+	assert.equal(f.states.at(-1).assessed, 0);
+	f.receive({ type: "KRB_ROUTE_CHANGED" });
+	assert.equal(f.states.at(-1).phase, "stale");
+});
+
+test("cancelled and failed checks report their independent stage without claiming completion", async function () {
+	const f = fixture(async () => ({ error: "offline" }));
+	await f.open();
+	f.start();
+	f.cancel();
+	assert.equal(f.states.at(-1).phase, "cancelled");
+	f.start();
+	const request = f.messages.findLast((message) => message.type === "KRB_ROUTE_SNAPSHOT");
+	f.receive({ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: request.requestId, error: "map unavailable" });
+	assert.equal(f.states.at(-1).phase, "incomplete");
+});
+
+
+test("trail settings omit install-time privacy notices and refresh prompts", function () {
+	const source = readFileSync(new URL("../route-dialog.js", import.meta.url), "utf8");
+	assert.doesNotMatch(source, /IP address|sync through your browser account|window\.confirm/);
+	assert.match(source, /openstreetmap.org\/copyright/);
 });

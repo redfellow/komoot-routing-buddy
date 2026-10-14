@@ -1,9 +1,10 @@
-// Trail-check UI keeps completed areas for retries and invalidates results after route edits.
+// Inline trail checks share the route analysis panel; retries retain completed areas.
 (function () {
-	const checker = globalThis.KrbRouteCheck;
-	let dialog,
-		trigger,
-		panel,
+	const checker = globalThis.KrbRouteCheck, warningButtons = [];
+	let paused = false,
+		onData,
+		onState,
+		dialog,
 		run,
 		route,
 		routeKey,
@@ -21,14 +22,8 @@
 	function field(name) {
 		return dialog.querySelector(`[data-route="${name}"]`);
 	}
-	function position() {
-		if (!dialog || dialog.hidden) return;
-		const rect = panel.getBoundingClientRect();
-		const width = Math.min(390, window.innerWidth - 16);
-		dialog.style.width = `${width}px`;
-		dialog.style.left = `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`;
-		const height = dialog.offsetHeight;
-		dialog.style.top = `${Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - height - 8))}px`;
+	function state(phase, details = {}) {
+		onState?.({ phase, ...details });
 	}
 	function clearRetryTimer() {
 		clearTimeout(retryTimer);
@@ -37,6 +32,7 @@
 	function showProgress(progress) {
 		clearRetryTimer();
 		const percent = progress.total ? Math.floor((progress.completed / progress.total) * 100) : 0;
+		state("checking", { percent });
 		field("status").textContent = `Checking trails… ${percent}%`;
 		field("bar").setAttribute("aria-valuenow", String(percent));
 		field("bar").setAttribute(
@@ -66,13 +62,14 @@
 	function busy(value) {
 		if (!value) clearRetryTimer();
 		field("progress").hidden = !value;
-		field("start").disabled = value;
-		field("refresh").disabled = value;
+		field("retry").disabled = value || paused;
+		field("retry").hidden = value || !failed;
+		field("refresh").disabled = value || paused;
 		field("cancel").hidden = !value;
-		field("preferences").disabled = value;
+		field("preferences").disabled = value || paused;
 		field("results").setAttribute("aria-busy", String(value));
 	}
-	function stop(text) {
+	function stop(text, phase = "incomplete") {
 		clearTimeout(requestTimer);
 		requestId++;
 		if (run) failed = true;
@@ -81,18 +78,25 @@
 		post({ type: "KRB_ROUTE_CHECK_ACTIVE", active: false });
 		if (!dialog) return;
 		busy(false);
-		if (text) field("status").textContent = text;
+		if (text) {
+			field("status").textContent = text;
+			state(phase);
+		}
 	}
 	function render(incomplete = false) {
 		if (!route) return;
 		const result = checker.analyse(route, collected, preferences);
 		field("results").replaceChildren();
+		warningButtons.length = 0;
 		for (const warning of result.warnings) {
 			const item = document.createElement("li"),
 				button = document.createElement("button");
 			button.type = "button";
+			button.disabled = paused;
+			warningButtons.push(button);
 			button.textContent = `${(warning.distance / 1000).toFixed(2)}km — ${warning.text}`;
 			button.addEventListener("click", function () {
+				if (paused) return;
 				post({
 					type: "KRB_ROUTE_FOCUS",
 					routeKey,
@@ -114,25 +118,27 @@
 		const missing = result.unknown;
 		field("unknown").textContent = [
 			missing.surface > 1
-				? `${(missing.surface / 1000).toFixed(2)}km of paths has an unknown surface (not assessed)`
+				? `Surface missing: ${(missing.surface / 1000).toFixed(1)} km`
 				: "",
 			missing.rating > 1
-				? `${(missing.rating / 1000).toFixed(2)}km of unpaved paths has no MTB scale (unknown)`
+				? `MTB grade missing: ${(missing.rating / 1000).toFixed(1)} km`
 				: "",
 			missing.width > 1
-				? `${(missing.width / 1000).toFixed(2)}km of MTB-rated unpaved trails has no width data`
+				? `Width missing: ${(missing.width / 1000).toFixed(1)} km`
 				: "",
 		]
 			.filter(Boolean)
 			.join(" · ");
+		field("gaps").hidden = !field("unknown").textContent;
 		field("status").textContent = incomplete
 			? "Trail check incomplete"
 			: result.warnings.length
 				? `${result.warnings.length} trail warning${result.warnings.length === 1 ? "" : "s"}`
 				: result.checkedDistance > 0
 					? checker.SUCCESS
-					: "No MTB-rated unpaved trails were identified on this route.";
-		position();
+					: "No matched MTB-rated OSM trails to assess.";
+		onData?.({ routeKey, features: collected, warnings: result.warnings, distance: result.distance, incomplete });
+		state(incomplete ? "incomplete" : "ready", { count: result.warnings.length, assessed: result.checkedDistance, gaps: Boolean(field("unknown").textContent) });
 	}
 	async function check(snapshot, key, controller) {
 		try {
@@ -168,12 +174,10 @@
 							},
 					waiting: function (value) {
 						showRetry(value);
-						position();
 					},
 					progress: function (progress) {
 						collected = progress.features;
 						showProgress(progress);
-						position();
 					},
 				},
 			);
@@ -199,13 +203,13 @@
 			if (run === controller) {
 				run = undefined;
 				busy(false);
-				field("start").textContent = failed ? "Retry" : "Check trails";
+				field("retry").textContent = "Retry check";
 				post({ type: "KRB_ROUTE_CHECK_ACTIVE", active: false });
-				position();
 			}
 		}
 	}
 	function start() {
+		if (paused) return;
 		stop();
 		preferences = checker.preferences({
 			maximumLevel: field("level").value,
@@ -220,175 +224,113 @@
 			checkpoint = {};
 			field("results").replaceChildren();
 			field("unknown").textContent = "";
+			field("gaps").hidden = true;
 		}
 		busy(true);
 		showProgress({ completed: 0, total: 0, cached: 0, downloaded: 0 });
 		field("status").textContent = "Reading Komoot route…";
+		state("reading");
 		field("counts").textContent = "";
 		field("activity").textContent = "Preparing trail check…";
 		post({ type: "KRB_ROUTE_CHECK_ACTIVE", active: true });
-		post({ type: "KRB_ROUTE_SNAPSHOT", requestId });
+		post({ type: "KRB_ROUTE_SNAPSHOT", requestId: `check:${requestId}` });
 		requestTimer = setTimeout(function () {
 			stop("Trail check incomplete — map did not respond. Try again.");
 		}, 5000);
 	}
-	function open() {
-		if (!dialog) {
-			dialog = document.createElement("section");
-			dialog.id = "krb-route-dialog";
-			dialog.className = "krb-route";
-			dialog.setAttribute("role", "dialog");
-			dialog.setAttribute("aria-labelledby", "krb-route-title");
-			dialog.innerHTML = `
-			<button
-				type="button"
-				class="krb-settings__close"
-				data-route="close"
-				aria-label="Close trail checker"
-			>
-				×
-			</button>
-			<h2 id="krb-route-title">Check trails along route</h2>
-			<p class="krb-route__help">
-				Checks MTB-rated, unpaved trails against your limits. Roads, streets, cycleways and paved paths
-				are excluded. Missing data is reported separately; uncertain matches are not checked.
-			</p>
-			<p class="krb-route__help">
-				Outside local coverage, checks send route-area bounds and your IP address to Private.coffee,
-				VK Maps or overpass-api.de. Updating from OSM sends bounds even inside local coverage.
-				Your check preferences may sync through your browser account.
-			</p>
-			<fieldset data-route="preferences">
-				<label>
-					Maximum trail level
-					<select data-route="level"></select>
-				</label>
-				<label>
-					Minimum trail width
-					<output data-route="width-value">0.4m</output>
-					<input data-route="width" type="range" min="0.1" max="1" step="0.1" value="0.4" />
-				</label>
-				<label class="krb-route__checkbox">
-					<input data-route="hazards" type="checkbox" />
-					Allow hazards
-				</label>
-				<p class="krb-route__help">
-					Allow hazards ignores mud, vegetation and obstacles. Difficulty and minimum width still apply.
-				</p>
-			</fieldset>
-			<div class="krb-route__actions">
-				<button type="button" data-route="start">Check trails</button>
-				<button type="button" class="krb-route__refresh" data-route="refresh">
-					Update current route from OSM
-				</button>
-				<button type="button" data-route="cancel" hidden>Cancel</button>
+	async function mount(container, callback, stateCallback) {
+		if (dialog) return;
+		onData = callback;
+		onState = stateCallback;
+		dialog = document.createElement("section");
+		dialog.className = "krb-ride__checks";
+		dialog.setAttribute("aria-labelledby", "krb-check-title");
+		dialog.innerHTML = `
+			<div class="krb-ride__section-heading"><h3 id="krb-check-title">Trail checks</h3><span class="krb-ride__tag">OSM</span></div>
+			<p class="krb-ride__muted">Find mapped hazards and trails beyond your difficulty or width limits.</p>
+			<div class="krb-ride__check-actions">
+				<button class="krb-ride__button krb-ride__button--secondary" type="button" data-route="retry" hidden>Retry check</button>
+				<button class="krb-ride__button krb-ride__button--secondary" type="button" data-route="cancel" hidden>Cancel check</button>
 			</div>
-			<p data-route="status" role="status" aria-live="polite">
-				Check MTB-rated unpaved trails along your Komoot route using OSM data.
-			</p>
+			<p class="krb-ride__check-status" data-route="status" role="status" aria-live="polite">Trail checks run with route analysis. Missing OSM data stays unknown.</p>
 			<div class="krb-route__progress" data-route="progress" hidden>
-				<div
-					class="krb-route__bar"
-					data-route="bar"
-					role="progressbar"
-					aria-label="Trail data areas checked"
-					aria-valuemin="0"
-					aria-valuemax="100"
-					aria-valuenow="0"
-				>
-					<span class="krb-route__fill" data-route="fill"></span>
-				</div>
-				<p class="krb-route__help" data-route="counts"></p>
-				<p class="krb-route__help" data-route="activity"></p>
+				<div class="krb-route__bar" data-route="bar" role="progressbar" aria-label="Trail data areas checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="krb-route__fill" data-route="fill"></span></div>
+				<p class="krb-ride__source" data-route="counts"></p>
+				<p class="krb-ride__source" data-route="activity"></p>
 			</div>
-			<p class="krb-route__help" data-route="unknown"></p>
-			<p class="krb-route__help" data-route="source"></p>
-			<ol data-route="results" class="krb-route__results"></ol>
-			<a
-				class="krb-route__help"
-				href="https://www.openstreetmap.org/copyright"
-				target="_blank"
-				rel="noopener noreferrer"
-			>
-				© OpenStreetMap
-			</a>
-		`;
-			for (let level = 0; level <= 5; level++) {
-				const option = document.createElement("option");
-				option.value = `S${level}`;
-				option.textContent = option.value;
-				field("level").append(option);
-			}
-			document.documentElement.append(dialog);
-			field("level").value = preferences.maximumLevel;
-			field("width").value = String(preferences.minimumWidth);
-			field("width-value").textContent = `${preferences.minimumWidth.toFixed(1)}m`;
-			field("hazards").checked = preferences.allowHazards;
-			field("width").addEventListener("input", function () {
-				field("width-value").textContent = `${Number(field("width").value).toFixed(1)}m`;
-			});
-			field("preferences").addEventListener("change", function () {
-				preferences = checker.preferences({
-					maximumLevel: field("level").value,
-					minimumWidth: Number(field("width").value),
-					allowHazards: field("hazards").checked,
-				});
-				globalThis.KrbBrowser.storage.sync
-					.set({ routeCheckPreferences: preferences })
-					.catch(function (error) {
-						field("status").textContent = `Could not save preferences: ${error.message}`;
-					});
-				if (route) render(failed);
-			});
-			field("start").addEventListener("click", function () {
-				if (!failed) refreshing = false;
-				start();
-			});
-			field("refresh").addEventListener("click", function () {
-				if (
-					!window.confirm(
-						"Send current route-area bounds to Private.coffee, VK Maps or overpass-api.de to update OSM data? These providers also receive your IP address. Requests may take several minutes or longer and can pause on timeouts. Successful areas are kept for seven days. Continue?",
-					)
-				)
-					return;
-				refreshing = true;
-				failed = false;
-				checkpoint = {};
-				start();
-			});
-			field("cancel").addEventListener("click", function () {
-				stop("Trail check cancelled. Completed areas remain cached.");
-				failed = true;
-				field("start").textContent = "Retry";
-			});
-			function close() {
-				stop(run ? "Trail check cancelled. Completed areas remain cached." : undefined);
-				dialog.hidden = true;
-				trigger.setAttribute("aria-expanded", "false");
-				trigger.focus();
-			}
-			field("close").addEventListener("click", close);
-			dialog.addEventListener("keydown", function (event) {
-				event.stopPropagation();
-				if (event.key === "Escape") close();
-			});
-			new MutationObserver(position).observe(panel, {
-				attributes: true,
-				attributeFilter: ["style", "open"],
-			});
-			window.addEventListener("resize", position);
+			<ol data-route="results" class="krb-ride__warnings" hidden></ol>
+			<details class="krb-ride__notice" data-route="gaps" hidden><summary>OSM data gaps</summary><p data-route="unknown"></p></details>
+			<p class="krb-ride__source" data-route="source"></p>
+			<details class="krb-ride__check-settings"><summary>Check settings & data</summary>
+				<fieldset data-route="preferences"><legend class="krb-ride__sr-only">Trail check limits</legend>
+					<label>Maximum trail level <select data-route="level"></select></label>
+					<label>Minimum trail width <output data-route="width-value">0.4 m</output><input data-route="width" type="range" min="0.1" max="1" step="0.1" value="0.4" /></label>
+					<label class="krb-ride__check-checkbox"><input data-route="hazards" type="checkbox" /> Ignore mud, vegetation & obstacles</label>
+				</fieldset>
+				<p class="krb-ride__source">Checks MTB-rated, unpaved trails. Roads, streets, cycleways and paved paths are excluded; uncertain matches are not checked. Difficulty and width limits still apply when hazards are ignored.</p>
+				<button class="krb-ride__button krb-ride__button--secondary" type="button" data-route="refresh">Update route data from OSM</button>
+				<p class="krb-ride__source"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a></p>
+			</details>`;
+		container.append(dialog);
+		for (let level = 0; level <= 5; level++) {
+			const option = document.createElement("option");
+			option.value = `S${level}`;
+			option.textContent = option.value;
+			field("level").append(option);
 		}
-		dialog.hidden = false;
-		trigger.setAttribute("aria-expanded", "true");
-		position();
-		field("level").focus();
+		try {
+			const saved = await globalThis.KrbBrowser.storage.sync.get("routeCheckPreferences");
+			preferences = checker.preferences(saved.routeCheckPreferences);
+		}
+		catch (error) {
+			console.warn("Could not read route preferences:", error);
+		}
+		field("level").value = preferences.maximumLevel;
+		field("width").value = String(preferences.minimumWidth);
+		field("width-value").textContent = `${preferences.minimumWidth.toFixed(1)} m`;
+		field("hazards").checked = preferences.allowHazards;
+		field("width").addEventListener("input", function () {
+			field("width-value").textContent = `${Number(field("width").value).toFixed(1)} m`;
+		});
+		field("preferences").addEventListener("change", async function () {
+			preferences = checker.preferences({ maximumLevel: field("level").value, minimumWidth: Number(field("width").value), allowHazards: field("hazards").checked });
+			try {
+				await globalThis.KrbBrowser.storage.sync.set({ routeCheckPreferences: preferences });
+			}
+			catch (error) {
+				field("status").textContent = `Could not save preferences: ${error.message}`;
+				return;
+			}
+			if (route && !run) render(failed);
+		});
+		field("retry").addEventListener("click", function () {
+			if (!failed) refreshing = false;
+			start();
+		});
+		field("refresh").addEventListener("click", function () {
+			if (paused) return;
+			refreshing = true;
+			failed = false;
+			checkpoint = {};
+			start();
+		});
+		field("cancel").addEventListener("click", cancel);
+		busy(false);
+		state("idle");
 	}
+	function cancel() {
+		if (!run) return;
+		stop("Trail check cancelled. Completed areas remain cached.", "cancelled");
+		failed = true;
+		field("retry").textContent = "Retry check";
+	}
+
 	window.addEventListener("message", function (event) {
 		if (event.source !== window || event.origin !== location.origin) return;
 		const message = event.data;
 		if (
 			message?.type === "KRB_ROUTE_SNAPSHOT_DATA" &&
-			message.requestId === requestId &&
+			message.requestId === `check:${requestId}` &&
 			run &&
 			!run.snapshotReceived
 		) {
@@ -403,8 +345,9 @@
 		if (["KRB_ROUTE_CHANGED", "KRB_OSM_DATA_UPDATED"].includes(message?.type) && (route || run)) {
 			stop(
 				message.type === "KRB_ROUTE_CHANGED"
-					? "Route changed — trail results are outdated. Check trails again."
-					: "OSM data updated — check trails again.",
+					? "Trail results outdated — reanalyse."
+					: "OSM data updated — reanalyse to update trail checks.",
+				"stale",
 			);
 			route = undefined;
 			collected = [];
@@ -412,35 +355,14 @@
 			refreshing = false;
 			field("results").replaceChildren();
 			field("unknown").textContent = "";
-			field("start").textContent = "Check trails";
+			field("gaps").hidden = true;
+			field("retry").hidden = true;
 		}
 	});
-	function attach(element) {
-		panel = element;
-		trigger = document.createElement("button");
-		trigger.type = "button";
-		trigger.className = "krb-panel__settings krb-panel__route";
-		trigger.setAttribute("aria-label", "Check trails");
-		trigger.setAttribute("aria-expanded", "false");
-		trigger.title = "Check trails";
-		trigger.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="m15.4 15.4 5.1 5.1"/><path d="M10 5.7 14.2 13H5.8Z" stroke-width="1.2" stroke-linejoin="round"/><path d="M10 8.3v1.8" stroke-width="1.3"/><circle cx="10" cy="11.6" r=".65" fill="currentColor" stroke="none"/></svg>`;
-		panel.querySelector(".krb-panel__settings").before(trigger);
-		trigger.addEventListener("click", async function (event) {
-			event.preventDefault();
-			event.stopPropagation();
-			if (dialog && !dialog.hidden) {
-				field("close").click();
-				return;
-			}
-			try {
-				const saved = await globalThis.KrbBrowser.storage.sync.get("routeCheckPreferences");
-				preferences = checker.preferences(saved.routeCheckPreferences);
-			}
-			catch (error) {
-				console.warn("Could not read route preferences:", error);
-			}
-			open();
-		});
+	function setPaused(value) {
+		paused = value;
+		for (const button of warningButtons) button.disabled = value;
+		if (dialog) busy(Boolean(run));
 	}
-	globalThis.KrbRouteDialog = { attach };
+	globalThis.KrbRouteDialog = { mount, start, cancel, setPaused };
 })();

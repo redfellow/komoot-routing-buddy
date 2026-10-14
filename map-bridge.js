@@ -1114,7 +1114,69 @@
 	}
 	let checkedRouteKey;
 	let routeHighlightTimer;
+	let routePreviewTimer, routePreviewId;
+	function rideCoordinates(route, returnTour = false) {
+		const rendered = [];
+		for (const feature of route.features) {
+			const lines = feature.geometry.type === "LineString" ? [feature.geometry.coordinates] : feature.geometry.coordinates;
+			for (const line of lines) {
+				for (const point of line) {
+					const previous = rendered.at(-1);
+					if (!previous || previous[0] !== point[0] || previous[1] !== point[1]) rendered.push(point);
+				}
+			}
+		}
+		const queue = [];
+		for (const element of document.querySelectorAll("*")) {
+			for (const key of Object.getOwnPropertyNames(element)) {
+				if (key.startsWith("__reactFiber$")) queue.push(element[key]);
+			}
+		}
+		const seen = new Set();
+		for (let index = 0; index < queue.length && index < 100000; index++) {
+			const value = queue[index];
+			if (!value || typeof value !== "object" || seen.has(value) || value instanceof Node || value === window) continue;
+			seen.add(value);
+			// The editor's props identify the active tour; rendered sources can contain duplicate overlays.
+			if (value.page && value.tour?.attributes?.type === "tour_planned" && typeof value.tour.link === "function") {
+				const active = value.tour, items = active.link("coordinates")?.get?.("items");
+				if (Array.isArray(items) && items.length >= 2 && items.length <= 250000) {
+					if (returnTour) return active;
+					return items.map((point) => ({ lat: point.lat, lng: point.lng, alt: Number.isFinite(point.alt) ? point.alt : undefined }));
+				}
+			}
+			if (value.attributes?.type === "tour_planned" && typeof value.link === "function") {
+				const coordinates = value.link("coordinates")?.get?.("items");
+				if (Array.isArray(coordinates) && coordinates.length <= 250000) {
+					const unique = coordinates.filter((point, i) => !i || point.lat !== coordinates[i - 1].lat || point.lng !== coordinates[i - 1].lng);
+					if (unique.length === rendered.length && unique.every((point, i) => point.lng === rendered[i][0] && point.lat === rendered[i][1])) {
+						if (returnTour) return value;
+						return coordinates.map(function (point) {
+							return { lat: point.lat, lng: point.lng, alt: Number.isFinite(point.alt) ? point.alt : undefined };
+						});
+					}
+				}
+			}
+			for (const descriptor of Object.values(Object.getOwnPropertyDescriptors(value))) {
+				if (descriptor.value && typeof descriptor.value === "object" && queue.length < 100000) queue.push(descriptor.value);
+			}
+		}
+		return undefined;
+	}
 	function routeSnapshot() {
+		const active = rideCoordinates({ features: [] }, true);
+		if (active) {
+			const items = active.link("coordinates").get("items"),
+				segments = active.link("segments")?.models?.map((segment) => segment.attributes) || [],
+				valid = segments.filter((segment) => Number.isInteger(segment.from) && Number.isInteger(segment.to) &&
+					segment.from >= 0 && segment.to > segment.from && segment.to < items.length),
+				features = valid.length ? valid.map(function (segment) {
+					return { type: "Feature", properties: { segment_type: segment.type }, geometry: { type: "LineString",
+						coordinates: items.slice(segment.from, segment.to + 1).map((point) => [point.lng, point.lat]) } };
+				}) : [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: items.map((point) => [point.lng, point.lat]) } }],
+				route = { type: "FeatureCollection", features };
+			return { route, routeKey: JSON.stringify(route) };
+		}
 		const data = map?.getSource("komoot_tour")?._data;
 		if (!data || typeof data !== "object") throw new Error("Komoot route is not ready");
 		const features = (
@@ -1137,11 +1199,19 @@
 		return { route, routeKey: JSON.stringify(route) };
 	}
 	function clearRouteHighlight() {
+		clearRoutePreview();
 		clearTimeout(routeHighlightTimer);
 		if (map?.getLayer("krb-route-check-highlight")) map.removeLayer("krb-route-check-highlight");
 		if (map?.getSource("krb-route-check-highlight")) map.removeSource("krb-route-check-highlight");
 	}
-	function checkRouteChanged() {
+	function clearRoutePreview() {
+		clearTimeout(routePreviewTimer);
+		routePreviewId = undefined;
+		if (map?.getLayer("krb-route-preview")) map.removeLayer("krb-route-preview");
+		if (map?.getSource("krb-route-preview")) map.removeSource("krb-route-preview");
+	}
+	function checkRouteChanged(reason) {
+		if (poiOperation) return;
 		if (!checkedRouteKey) return;
 		let current;
 		try {
@@ -1153,14 +1223,74 @@
 		if (current !== checkedRouteKey) {
 			checkedRouteKey = undefined;
 			clearRouteHighlight();
-			window.postMessage({ type: "KRB_ROUTE_CHANGED" }, location.origin);
+			window.postMessage({ type: "KRB_ROUTE_CHANGED", reason: typeof reason === "string" ? reason : undefined }, location.origin);
 		}
+	}
+	let poiOperation;
+	const poiResults = new Map();
+	async function addApprovedPois(message) {
+		if (typeof message.requestId !== "string" || !/^poi:\d+$/.test(message.requestId)) return;
+		if (poiResults.has(message.requestId)) {
+			window.postMessage(poiResults.get(message.requestId), location.origin);
+			return;
+		}
+		if (poiOperation) return;
+		const operation = { id: message.requestId, cancelled: false, pathname: location.pathname };
+		poiOperation = operation;
+		let result, editingBody, previousInert;
+		try {
+			const snapshot = routeSnapshot(), tour = rideCoordinates(snapshot.route, true);
+			if (message.routeKey !== snapshot.routeKey || message.routeKey !== checkedRouteKey)
+				throw new Error("Route changed. Analyse again before adding POIs.");
+			if (!/^\/(?:plan(?:\/|$)|tour\/[^/]+\/edit$)/.test(location.pathname))
+				throw new Error("Open the Komoot route editor before adding POIs.");
+			// Extension dialogs live outside body; they remain usable while native edits are paused.
+			editingBody = document.body;
+			previousInert = editingBody.inert;
+			editingBody.inert = true;
+			result = await globalThis.KrbKomootPoiInsert.insert(tour, message.pois, {
+				cancelled: () => operation.cancelled || location.pathname !== operation.pathname,
+				isCurrent: () => routeSnapshot().routeKey === message.routeKey,
+			});
+		}
+		catch (error) {
+			result = { error: error.message };
+		}
+		finally {
+			if (editingBody) editingBody.inert = previousInert;
+			poiOperation = undefined;
+		}
+		const reply = { type: "KRB_POI_RESULT", requestId: message.requestId, ...result };
+		poiResults.set(message.requestId, reply);
+		if (poiResults.size > 16) poiResults.delete(poiResults.keys().next().value);
+		window.postMessage(reply, location.origin);
+		if (result.added > 0) {
+			checkedRouteKey = undefined;
+			clearRouteHighlight();
+			window.postMessage({ type: "KRB_ROUTE_CHANGED", reason: "poi-insertion" }, location.origin);
+		}
+		else checkRouteChanged();
 	}
 	window.addEventListener("message", function (event) {
 		if (event.source !== window || event.origin !== location.origin) return;
+		if (event.data?.type === "KRB_POI_CANCEL" && poiOperation?.id === event.data.requestId) poiOperation.cancelled = true;
+		if (event.data?.type === "KRB_POI_ADD") void addApprovedPois(event.data);
 		if (event.data?.type === "KRB_ROUTE_SNAPSHOT") {
 			try {
 				const snapshot = routeSnapshot();
+				if (event.data.includeProfile === true) {
+					const active = rideCoordinates(snapshot.route, true);
+					if (!active) throw new Error("Komoot route metadata is not ready. Try again when the route has loaded.");
+					snapshot.nativeProfile = {
+						coordinates: rideCoordinates(snapshot.route),
+						surfaces: active.link("surfaces")?.get?.("items"),
+						wayTypes: active.link("way_types")?.get?.("items"),
+						distance: active.get?.("distance"), ascent: active.get?.("elevation_up"),
+						existingPois: globalThis.KrbKomootPoiInsert?.supported(active) ? globalThis.KrbKomootPoiInsert.existingPois(active) : [],
+					};
+					snapshot.poiAvailable = /^\/(?:plan(?:\/|$)|tour\/[^/]+\/edit$)/.test(location.pathname) &&
+						globalThis.KrbKomootPoiInsert?.supported(rideCoordinates(snapshot.route, true)) === true;
+				}
 				checkedRouteKey = snapshot.routeKey;
 				window.postMessage(
 					{ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: event.data.requestId, ...snapshot },
@@ -1181,6 +1311,12 @@
 		if (event.data?.type === "KRB_ROUTE_FOCUS" && map) {
 			checkRouteChanged();
 			if (!checkedRouteKey || event.data.routeKey !== checkedRouteKey) return;
+			if (event.data.clearPreview === true) {
+				if (event.data.previewId === routePreviewId) clearRoutePreview();
+				return;
+			}
+			const preview = event.data.previewOnly === true;
+			if (preview && (typeof event.data.previewId !== "string" || event.data.previewId.length > 100)) return;
 			const { point, coordinates } = event.data;
 			const valid = function (p) {
 				return (
@@ -1200,23 +1336,45 @@
 				!coordinates.every(valid)
 			)
 				return;
-			clearRouteHighlight();
+			const sections = event.data.sections;
+			if (sections !== undefined && (!preview || !Array.isArray(sections) || !sections.length || sections.length > 10000 ||
+				sections.some((line) => !Array.isArray(line) || line.length < 2) ||
+				sections.reduce((count, line) => count + line.length, 0) > 100000 || !sections.every((line) => line.every(valid)))) return;
+			if (preview && event.data.replaceHighlight !== true) clearRoutePreview();
+			else clearRouteHighlight();
 			try {
-				map.addSource("krb-route-check-highlight", {
+				const source = preview ? "krb-route-preview" : "krb-route-check-highlight",
+					duration = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 600;
+				map.addSource(source, {
 					type: "geojson",
-					data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates } },
+					data: { type: "Feature", properties: {}, geometry: sections ? { type: "MultiLineString", coordinates: sections } : { type: "LineString", coordinates } },
 				});
 				map.addLayer({
-					id: "krb-route-check-highlight",
-					source: "krb-route-check-highlight",
+					id: source,
+					source,
 					type: "line",
 					paint: { "line-color": "#ff00bb", "line-width": 8, "line-opacity": 0.8 },
 				});
-				map.easeTo({ center: point, zoom: Math.max(map.getZoom(), 16), duration: 600 });
+				if (preview) {
+					routePreviewId = event.data.previewId;
+					routePreviewTimer = setTimeout(clearRoutePreview, 8000);
+					return;
+				}
+				if (event.data.fitSection === true && typeof map.fitBounds === "function") {
+					const bounds = coordinates.reduce(function (box, p) {
+						return [[Math.min(box[0][0], p[0]), Math.min(box[0][1], p[1])], [Math.max(box[1][0], p[0]), Math.max(box[1][1], p[1])]];
+					}, [[point[0], point[1]], [point[0], point[1]]]),
+						width = map.getContainer?.()?.clientWidth || window.innerWidth,
+						right = Number.isFinite(event.data.paddingRight) ? Math.max(40, Math.min(event.data.paddingRight, width * 0.45)) : 64;
+					map.fitBounds(bounds, { padding: { top: 64, bottom: 64, left: 64, right }, maxZoom: 17, duration });
+				}
+				else map.easeTo({ center: point, zoom: Math.max(map.getZoom(), 16), duration });
 				routeHighlightTimer = setTimeout(clearRouteHighlight, 8000);
 			}
 			catch (error) {
 				console.warn("Could not focus route warning:", error);
+				if (preview) clearRoutePreview();
+				else clearRouteHighlight();
 			}
 		}
 	});
@@ -1293,7 +1451,7 @@
 
 	setInterval(function () {
 		if (map && !document.contains(map.getCanvas())) {
-			if (checkedRouteKey) window.postMessage({ type: "KRB_ROUTE_CHANGED" }, location.origin);
+			if (checkedRouteKey && !poiOperation) window.postMessage({ type: "KRB_ROUTE_CHANGED" }, location.origin);
 			checkedRouteKey = undefined;
 			clearRouteHighlight();
 			map.off("styledata", scheduleApply);
