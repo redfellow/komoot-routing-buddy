@@ -1,7 +1,7 @@
 {
 	"manifest_version": 3,
 	"name": "Komoot Routing Buddy",
-	"version": "1.6.0",
+	"version": "1.7.0",
 	"description": "Colour MTB trails, analyse terrain and climbs, check mapped hazards, and add approved route POIs in Komoot.",
 	"permissions": ["storage", "unlimitedStorage", "declarativeNetRequestWithHostAccess", "alarms"],
 	"action": {
