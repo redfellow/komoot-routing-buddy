@@ -118,16 +118,26 @@
 	function warningSymbol(warning) {
 		const kind = warning.kind === "hazard" && /fallen tree|obstacle|gate|barrier/i.test(warning.text) ? "obstacle" : warning.kind,
 			paths = {
-				difficulty: `<path d="m3 19 7-14 4 8 3-5 4 11H3Z"/><path d="m8 9 2 2 2-2"/>`,
-				width: `<path d="M4 5v14M20 5v14M7 12h10m-7-3-3 3 3 3m4-6 3 3-3 3"/>`,
-				obstacle: `<path d="M5 8v12M19 8v12M3 8h18v6H3Z"/><path d="m5 14 6-6m1 6 6-6"/>`,
-				hazard: `<path d="m12 3 10 18H2L12 3Z"/><path d="M12 9v5m0 3h.01"/>`,
+				difficulty: ["m3 19 7-14 4 8 3-5 4 11H3Z", "m8 9 2 2 2-2"],
+				width: ["M4 5v14M20 5v14M7 12h10m-7-3-3 3 3 3m4-6 3 3-3 3"],
+				obstacle: ["M5 8v12M19 8v12M3 8h18v6H3Z", "m5 14 6-6m1 6 6-6"],
+				hazard: ["m12 3 10 18H2L12 3Z", "M12 9v5m0 3h.01"],
 			},
-			icon = document.createElement("span");
+			selected = Object.hasOwn(paths, kind) ? kind : "hazard",
+			icon = document.createElement("span"),
+			svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 		icon.className = "krb-ride__warning-symbol";
 		icon.setAttribute("aria-hidden", "true");
-		icon.setAttribute("data-warning-symbol", paths[kind] ? kind : "hazard");
-		icon.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[kind] || paths.hazard}</svg>`;
+		icon.setAttribute("data-warning-symbol", selected);
+		for (const [name, value] of Object.entries({ viewBox: "0 0 24 24", width: "20", height: "20", fill: "none", stroke: "currentColor", "stroke-width": "1.8", "stroke-linecap": "round", "stroke-linejoin": "round" })) {
+			svg.setAttribute(name, value);
+		}
+		for (const value of paths[selected]) {
+			const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+			path.setAttribute("d", value);
+			svg.append(path);
+		}
+		icon.append(svg);
 		return icon;
 	}
 	function render() {

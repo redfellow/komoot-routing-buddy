@@ -37,7 +37,7 @@ function fixture({ adapter = true, defer = false, deferInsert = false, stableGra
 	const context = {
 		window, AbortController, console,
 		location: { origin: "https://www.komoot.com" },
-		document: { createElement: element, documentElement: { append() {} } },
+		document: { createElement: element, createElementNS: element, documentElement: { append() {} } },
 		setTimeout() { return 1; }, clearTimeout() {},
 		KrbBrowser: { runtime: { async sendMessage() { throw new Error("Ride overview must not query OSM"); } } },
 		KrbRouteDialog: {

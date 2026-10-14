@@ -1,6 +1,6 @@
 # Next-version Chrome Web Store assets
 
-Prepared 2026-10-14 from the current unreleased workspace. The release number is intentionally unset. These assets do not publish or package the extension.
+Prepared 2026-10-14 from the current unreleased workspace. Release 1.6.0. Listing assets are separate from the extension upload ZIP.
 
 The updated listing describes the ride overview, native surface/way-type/elevation data, combined trail warnings and explicitly approved native POIs. It replaces the old claim that the extension never changes a route. Onboarding is not advertised because it is only planned.
 
@@ -8,4 +8,4 @@ Three current screenshots are ready in screenshots/, in numbered upload order. S
 
 Verified screenshots: 1280 × 800 full-bleed captures with square corners, map attribution and real extension UI retained. Requirements: https://developer.chrome.com/docs/webstore/images
 
-Historical chrome-store-1.5.2 assets are preserved. No build, ZIP, tag or Store upload is part of this asset refresh.
+Historical chrome-store-1.5.2 assets are preserved. See submission-guide.md for package validation and dashboard instructions.
