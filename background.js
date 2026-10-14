@@ -110,3 +110,28 @@ globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender, s
 		.catch((error) => sendResponse({ error: error.message }));
 	return true;
 });
+
+// The worker owns the once-per-install marker and serializes competing tab claims.
+let guideClaims = Promise.resolve();
+globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+	if (message?.type !== "KRB_CLAIM_GUIDE" || sender.id !== globalThis.KrbBrowser.runtime.id || !sender.tab)
+		return;
+	if (!/^https:\/\/www\.komoot\.com\/(?:tour\/[^/]+\/(?:zoom|edit)|plan(?:\/[^?]*)?)(?:\?.*)?$/.test(sender.url || ""))
+		return;
+	async function claim() {
+		try {
+			const saved = await globalThis.KrbBrowser.storage.local.get("quickGuideSeen");
+			if (saved.quickGuideSeen === true) {
+				sendResponse({ show: false });
+				return;
+			}
+			await globalThis.KrbBrowser.storage.local.set({ quickGuideSeen: true });
+			sendResponse({ show: true });
+		}
+		catch (error) {
+			sendResponse({ show: false, error: error.message });
+		}
+	}
+	guideClaims = guideClaims.then(claim);
+	return true;
+});

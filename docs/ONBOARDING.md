@@ -27,4 +27,4 @@ Use visible keyboard focus, labelled controls, at least 44 px touch targets and 
 
 Test first eligible use, unrelated pages, simultaneous tabs, reload, interrupted guides, Skip/Done/Escape, updates, manual replay, missing routes, keyboard navigation and narrow layouts. Verify that completing onboarding sends no route-analysis request and makes no route changes.
 
-This is a design plan; onboarding implementation is not included yet.
+Implemented for 1.7.0 in onboarding.js, with the serialized claim in background.js. The local marker is quickGuideSeen. Reloading the extension and Komoot page preserves it; use Settings → Show quick guide to replay without clearing data. If testing an existing installation with no marker, the guide appears once when the map is ready. Navigation never starts route analysis or writes POIs.

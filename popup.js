@@ -341,4 +341,24 @@ window.addEventListener("keydown", function (event) {
 	}
 });
 
+
+// Replay is explicit and does not reset the installation marker.
+document.querySelector("#showQuickGuide").addEventListener("click", async function () {
+	if (window.parent !== window) {
+		window.parent.postMessage({ type: "KRB_SHOW_GUIDE" }, "https://www.komoot.com");
+		return;
+	}
+	try {
+		const tabs = await globalThis.KrbBrowser.tabs.query({ active: true, currentWindow: true });
+		const tab = tabs[0];
+		if (!tab?.id) throw new Error("Open a Komoot map first.");
+		const response = await globalThis.KrbBrowser.tabs.sendMessage(tab.id, { type: "KRB_SHOW_GUIDE" });
+		status.textContent = response?.shown ? "Quick guide opened on the map." : "Open a supported Komoot map and wait for it to load.";
+	}
+	catch (error) {
+		status.textContent = "Open a supported Komoot map to show the quick guide.";
+		console.debug("Quick guide unavailable:", error.message);
+	}
+});
+
 initialise();

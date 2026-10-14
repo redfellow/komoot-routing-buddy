@@ -25,7 +25,7 @@ function setup() {
 		};
 	}
 	const nodes = Object.fromEntries(
-		["#rules", "#status", "#restore"].map((name) => [name, element()]),
+		["#rules", "#status", "#restore", "#showQuickGuide"].map((name) => [name, element()]),
 	);
 	const timers = new Map();
 	const writes = [];
@@ -73,6 +73,7 @@ function setup() {
 			addEventListener() {},
 		},
 	};
+	context.window.parent = context.window;
 	const source = readFileSync(new URL("../popup.js", import.meta.url), "utf8").replace(
 		/initialise\(\);\s*$/,
 		"",
@@ -81,6 +82,7 @@ function setup() {
 	context.render({ S0: "highlight" }, { S0: "#26a269" });
 	const row = nodes["#rules"].children[0];
 	return {
+		guide: nodes["#showQuickGuide"],
 		picker: row.children[2],
 		editor: row.children[3],
 		hex: row.children[3].children[3],
@@ -126,4 +128,11 @@ test("hex edits coalesce, reject incomplete colours and save automatically", asy
 	assert.equal(f.writes.length, 1);
 	f.editor.children[4].events.click();
 	assert.equal(f.editor.hidden, true);
+});
+
+test("settings replay sends only a guide message and does not reset stored settings", async function () {
+	const f = setup();
+	await f.guide.events.click();
+	assert.deepEqual(f.previews, [{ type: "KRB_SHOW_GUIDE" }]);
+	assert.deepEqual(f.writes, []);
 });

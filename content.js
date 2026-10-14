@@ -17,6 +17,7 @@
 		panel.inert = !mapReady;
 		panel.setAttribute("aria-busy", String(!mapReady));
 		panel.classList.toggle("krb-panel--loading", !mapReady);
+		globalThis.KrbOnboarding?.setReady(mapReady);
 	}
 	let layersRestoredThisLoad = false;
 	let restoringLayers = false;
@@ -280,6 +281,8 @@
 		updatePanelReadiness();
 		setupPanelControls(panel, state || {});
 		globalThis.KrbRideDialog?.attach(panel);
+		globalThis.KrbOnboarding?.attach(panel);
+		globalThis.KrbOnboarding?.setReady(mapReady);
 		setupOsmTooltip(panel);
 		renderHazardStatus(latestHazardStatus || { state: "loading", text: "Connecting to OSM map…" });
 	}
@@ -366,6 +369,10 @@
 				positionDialog();
 			}
 			else if (event.data?.type === "KRB_CLOSE_SETTINGS") dismiss();
+			else if (event.data?.type === "KRB_SHOW_GUIDE") {
+				dismiss();
+				globalThis.KrbOnboarding?.show();
+			}
 		});
 		function positionDialog() {
 			const rect = panel.getBoundingClientRect();
@@ -820,7 +827,11 @@
 		if (shouldRestore) restoreLayers(options);
 	}
 
-	globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender) {
+	globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+		if (sender.id === globalThis.KrbBrowser.runtime.id && message?.type === "KRB_SHOW_GUIDE") {
+			sendResponse({ shown: globalThis.KrbOnboarding?.show() === true });
+			return;
+		}
 		if (sender.id === globalThis.KrbBrowser.runtime.id && message?.type === "KRB_RELOAD_HAZARDS") {
 			routePreloadGeneration++;
 			window.postMessage({ type: "KRB_RELOAD_HAZARDS" }, location.origin);

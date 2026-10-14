@@ -33,6 +33,7 @@
 				"komoot-pois.js",
 				"ride-dialog.js",
 				"route-dialog.js",
+				"onboarding.js",
 				"content.js"
 			],
 			"css": ["planner.css"],

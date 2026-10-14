@@ -79,3 +79,7 @@ Read the [privacy policy](PRIVACY.md) before installing. Komoot Routing Buddy's 
 ## Contributing
 
 See [developer notes](READMORE.md), the [release guide](docs/RELEASING.md) and [local OSM guide](docs/LOCAL-OSM.md).
+
+### Quick guide
+
+On the first supported Komoot map after installation, a three-step guide explains trail colours, Analyse route and approved route POIs. It also appears once for existing installations when upgrading to 1.7.0. Skip or finish it to keep it dismissed across reloads and updates. Replay it through Settings → Show quick guide; clearing settings or country data is unnecessary.

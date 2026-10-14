@@ -14,7 +14,7 @@ The ride overview also reads the current route's elevation and waypoint metadata
 
 ## Preferences and browser synchronization
 
-Trail colours, rules, map options, remembered layer selections, Squadrats opacity and trail-check preferences use browser sync storage. When Chrome Sync is enabled, Google synchronizes these preferences across your signed-in Chrome browsers. Firefox may synchronize preferences through Mozilla when browser extension synchronization is enabled. Browser-account settings control synchronization. Country databases, online OSM caches, sidebar state, panel position and update job state are stored locally.
+Trail colours, rules, map options, remembered layer selections, Squadrats opacity and trail-check preferences use browser sync storage. When Chrome Sync is enabled, Google synchronizes these preferences across your signed-in Chrome browsers. Firefox may synchronize preferences through Mozilla when browser extension synchronization is enabled. Browser-account settings control synchronization. Country databases, online OSM caches, sidebar state, panel position, quick-guide display status and update job state are stored locally.
 
 ## Online OSM requests and recipients
 

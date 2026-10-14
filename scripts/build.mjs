@@ -24,6 +24,7 @@ export const runtimeFiles = [
 	"komoot-poi-insert.js",
 	"ride-dialog.js",
 	"route-dialog.js",
+	"onboarding.js",
 	"content.js",
 	"local-data.html",
 	"local-data.js",

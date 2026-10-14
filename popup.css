@@ -205,3 +205,15 @@ body.krb-local-data {
 	width: 100%;
 	margin-top: 12px;
 }
+
+.settings__guide {
+	min-height: 44px;
+	margin-bottom: 12px;
+	padding: 8px 14px;
+	border: 1px solid #dce4d7;
+	border-radius: 10px;
+	background: #f6f8f2;
+	color: #1f2b23;
+	font: inherit;
+	cursor: pointer;
+}
