@@ -1,6 +1,6 @@
 # Komoot Routing Buddy
 
-Make mountain bike trails easier to read on Komoot. Colour S0–S5 trails, show mapped hazards and check the trails along your planned route. **Komoot Routing Buddy does not change your route or Komoot’s routing decisions.**
+Make mountain bike trails easier to read on Komoot. Colour S0–S5 trails, show mapped hazards and check the trails along your planned route. The development version also offers a ride overview and named route POIs added only after your approval.
 
 ## What it does
 
@@ -12,6 +12,18 @@ Make mountain bike trails easier to read on Komoot. Colour S0–S5 trails, show 
 
 Works on Komoot’s planner, route editing and full-screen map pages. Desktop Chrome/Brave and Firefox packages share the same features. Mobile has not been validated.
 
+## Route analysis (unreleased)
+
+Click **Analyse route** on the floater, even while collapsed, to start the Komoot ride summary and trail checks together. The summary shows route character, climbing concentrations and steep climbs as soon as it is ready. Adjust the minimum Gravel, Trails and Technical distances, maximum gap, ascent, gradient and climb-length thresholds as needed. Surface, way-type and elevation data come from Komoot. Missing native metadata stays unknown; the ride summary does not query OSM. Native S grades are used first; the automatic trail check reuses the existing conservative OSM matching to fill missing MTB grades. Komoot surfaces and way types are never replaced by OSM.
+
+Gravel qualifies after at least 2 km of actual gravel/dirt riding. Trails (singletrack or S0 paths) and Technical (S1–S5) require 500 m. Gaps up to 150 m join stretches without counting towards the minimum; each POI marks the first point of that riding category.
+
+Warnings appear beside riding sections in the distance-ordered **Along the route** list. Difficulty, width and mapped obstacles have distinct icons and labels. Hover or keyboard focus highlights a section without moving the map; clicking zooms to it. Ride data and trail checks have separate progress indicators. Check settings and OSM refresh live under **Check settings & data**. Missing data remains unknown. Closing the panel cancels an active check; route changes invalidate its results. Warnings are separate from POI suggestions.
+
+**Preview route POIs** previews `Gravel`, `Trails`, `Technical`, `Hills`, `Steep climb` and `Halfway` suggestions. Use each card’s magnifier to zoom to and temporarily highlight its section. Use the individual checkboxes to select the points you want, then click **Add approved POIs**. Proposed POIs remain available in their collapsible section. Matching points already on the route stay zoomable and are excluded from approval. Names stay under 16 characters; distance and climbing details appear in the preview. Points use exact positions along the route. Nearby Hills and Steep climb starts share the more specific climb POI while both findings remain in the analysis. With complete elevation, the overview can show where 95% of climbing is behind you. The extension checks geometry and existing POIs, avoids duplicate additions and restores the original route if insertion fails. Close the dialog to cancel an insertion. Save the route using Komoot when ready; the extension does not save automatically. Komoot and supported devices handle synchronization.
+
+See [feature behavior and validation](docs/RIDE-OVERVIEW.md).
+
 ## Install or update
 
 Get the appropriate file from [GitHub Releases](https://github.com/redfellow/komoot-routing-buddy/releases). Packages include Finland data and are about 150 MB each.
@@ -22,7 +34,7 @@ Get the appropriate file from [GitHub Releases](https://github.com/redfellow/kom
 2. Open `chrome://extensions` or `brave://extensions` and enable **Developer mode**.
 3. Choose **Load unpacked** and select the extracted folder.
 4. Wait for the **Local Finland data** tab to finish importing. It closes automatically.
-5. Open a Komoot map. Use the floating cog to change settings.
+5. Open a Komoot map. Expand the floater and use **Settings** to change settings.
 
 To update, replace the files in the same folder with the new Chrome package, then click **Reload** on the extension’s card. Your preferences and local data remain in the browser.
 
@@ -32,7 +44,7 @@ For a permanent installation, use the signed Firefox `.xpi` when provided. The `
 
 ## Check trails
 
-Click the magnifying glass beside the cog. Choose your limits and select **Check trails**. Defaults are **S1**, **0.4m** minimum width and hazards disallowed. These choices are separate from map colours.
+Trail checks start automatically with **Analyse route**. Open **Check settings & data** to adjust your limits. Defaults are **S1**, **0.4m** minimum width and hazards disallowed. These choices are separate from map colours.
 
 The checker assesses MTB-rated, unpaved trails. Roads, streets, cycleways and paved paths are excluded. Missing ratings, widths or surface information are reported where relevant; uncertain matches are not checked. Click a warning to centre the map on it. **Allow hazards** skips mud, vegetation and obstacles, but still checks difficulty and width.
 
