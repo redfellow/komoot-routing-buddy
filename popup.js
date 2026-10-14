@@ -168,6 +168,7 @@ async function saveOptions() {
 			maximumTrailLevel: document.querySelector("#maximumLevel").value,
 			squadratsBelowRoads: document.querySelector("#squadratsBelowRoads").checked,
 			colourLabels: document.querySelector("#colourLabels").checked,
+			emphasizeRoadNumbers: document.querySelector("#emphasizeRoadNumbers").checked,
 			showHazards: document.querySelector("#showHazards").checked,
 			preloadRouteHazards: document.querySelector("#preloadRouteHazards").checked,
 			rememberLayers: document.querySelector("#rememberLayers").checked,
@@ -201,6 +202,7 @@ document.querySelector("#restore").addEventListener("click", async function () {
 	document.querySelector("#squadratsBelowRoads").checked =
 		popupSettings.DEFAULT_OPTIONS.squadratsBelowRoads;
 	document.querySelector("#colourLabels").checked = popupSettings.DEFAULT_OPTIONS.colourLabels;
+	document.querySelector("#emphasizeRoadNumbers").checked = false;
 	document.querySelector("#showHazards").checked = popupSettings.DEFAULT_OPTIONS.showHazards;
 	document.querySelector("#preloadRouteHazards").checked = false;
 	document.querySelector("#rememberLayers").checked = popupSettings.DEFAULT_OPTIONS.rememberLayers;
@@ -311,6 +313,8 @@ async function initialise() {
 	document.querySelector("#squadratsBelowRoads").checked = options.squadratsBelowRoads !== false;
 	document.querySelector("#squadratsBelowRoads").addEventListener("change", saveOptions);
 	document.querySelector("#colourLabels").checked = options.colourLabels === true;
+	document.querySelector("#emphasizeRoadNumbers").checked = options.emphasizeRoadNumbers === true;
+	document.querySelector("#emphasizeRoadNumbers").addEventListener("change", saveOptions);
 	document.querySelector("#colourLabels").addEventListener("change", saveOptions);
 	document.querySelector("#showHazards").checked = options.showHazards;
 	const narrowSlider = document.querySelector("#narrowWarningWidth");

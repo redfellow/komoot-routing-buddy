@@ -217,3 +217,5 @@ body.krb-local-data {
 	font: inherit;
 	cursor: pointer;
 }
+
+.settings__road-numbers { margin: 0 0 12px; color: #657266; font-size: 12px; }

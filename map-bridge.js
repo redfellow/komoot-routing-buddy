@@ -3,6 +3,7 @@
 	const originals = new Map();
 	const rejectedPaintProperties = new WeakMap();
 	const squadratsOriginals = new Map();
+	const roadNumberOriginals = new Map();
 	const colours = ["#26cd69", "#33b8ff", "#ffd400", "#ff493f", "#57575a", "#000000"];
 	let map;
 	let config;
@@ -224,6 +225,64 @@
 		if (!same(map.getLayoutProperty(id, property), value))
 			map.setLayoutProperty(id, property, value ?? null);
 	}
+	// Reuse Komoot's numbered-road labels and keep native zoom/collision rules.
+	function applyRoadNumbers() {
+		const layers = (map.getStyle()?.layers || []).filter(function (layer) {
+			return layer.type === "symbol" && layer["source-layer"] === "road-label" &&
+				/^label-road-/.test(layer.id) && layer.layout?.["text-field"] !== undefined;
+		});
+		const ids = new Set(layers.map((layer) => layer.id));
+		for (const [id, saved] of roadNumberOriginals) {
+			if (!ids.has(id) || saved.layer !== map.getLayer(id)) roadNumberOriginals.delete(id);
+		}
+		if (config.emphasizeRoadNumbers !== true) {
+			for (const [id, saved] of roadNumberOriginals) {
+				setLayout(id, "text-field", saved.field);
+				for (const [property, value] of Object.entries(saved.paint)) setPaint(id, property, value);
+			}
+			roadNumberOriginals.clear();
+			return;
+		}
+		const ref = ["to-string", ["coalesce", ["get", "ref"], ""]];
+		const hasRef = ["!=", ref, ""];
+		for (const layer of layers) {
+			if (!roadNumberOriginals.has(layer.id)) {
+				roadNumberOriginals.set(layer.id, {
+					layer: map.getLayer(layer.id),
+					field: structuredClone(map.getLayoutProperty(layer.id, "text-field")),
+					paint: Object.fromEntries(["text-color", "text-halo-color", "text-halo-width"].map(function (property) {
+						return [property, structuredClone(getPaint(layer.id, property))];
+					})),
+				});
+			}
+			const saved = roadNumberOriginals.get(layer.id);
+			const field = transformStops(saved.field, function (value) {
+				// Legacy token strings need conversion before use inside expressions.
+				let native = value;
+				if (typeof value === "string" && /\{[^}]+\}/.test(value)) {
+					const parts = value.split(/(\{[^}]+\})/).filter(Boolean).map(function (part) {
+						return /^\{[^}]+\}$/.test(part) ? ["to-string", ["coalesce", ["get", part.slice(1, -1)], ""]] : part;
+					});
+					native = parts.length === 1 ? parts[0] : ["concat", ...parts];
+				}
+				const referenceOnly = value === "{ref}" || JSON.stringify(value) === '["get","ref"]';
+				const emphasized = referenceOnly ? ["format", ref, { "font-scale": 1.35 }] :
+					["format", ref, { "font-scale": 1.35 }, " · ", {}, native, {}];
+				return ["case", hasRef, emphasized, ["format", native, {}]];
+			}, ["get", "name"]);
+			setLayout(layer.id, "text-field", field);
+			setPaint(layer.id, "text-color", transformStops(saved.paint["text-color"], function (value) {
+				return ["case", hasRef, "#183f20", value];
+			}, "#333333"));
+			setPaint(layer.id, "text-halo-color", transformStops(saved.paint["text-halo-color"], function (value) {
+				return ["case", hasRef, "#ffffff", value];
+			}, "rgba(0,0,0,0)"));
+			setPaint(layer.id, "text-halo-width", transformStops(saved.paint["text-halo-width"], function (value) {
+				return ["case", hasRef, 2, value];
+			}, 0));
+		}
+	}
+
 	function restore(keep = new Set()) {
 		for (const [id, original] of originals) {
 			if (keep.has(id)) continue;
@@ -758,6 +817,7 @@
 		applying = true;
 		try {
 			applySquadrats();
+			applyRoadNumbers();
 			const preload =
 				config.preloadRouteHazards === true &&
 				config.showHazards === true &&
@@ -1477,6 +1537,7 @@
 			postStatus({ ready: false });
 			originals.clear();
 			squadratsOriginals.clear();
+			roadNumberOriginals.clear();
 			squadratsOrder.clear();
 			searchAttempts = 0;
 		}

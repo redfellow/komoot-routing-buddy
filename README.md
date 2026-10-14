@@ -83,3 +83,7 @@ See [developer notes](READMORE.md), the [release guide](docs/RELEASING.md) and [
 ### Quick guide
 
 On the first supported Komoot map after installation, a three-step guide explains trail colours, Analyse route and approved route POIs. It also appears once for existing installations when upgrading to 1.7.0. Skip or finish it to keep it dismissed across reloads and updates. Replay it through Settings → Show quick guide; clearing settings or country data is unnecessary.
+
+### Road numbers
+
+Settings → Emphasize road numbers makes available road references easier to read beside road names on Komoot's vector map. It is off by default and keeps Komoot's zoom and label-placement rules. Availability depends on the map's native data; it does not change route analysis or make extra data requests.

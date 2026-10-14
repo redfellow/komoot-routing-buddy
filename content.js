@@ -45,6 +45,7 @@
 					rules,
 					colours,
 					colourLabels: options.colourLabels === true,
+					emphasizeRoadNumbers: options.emphasizeRoadNumbers === true,
 					showHazards: options.showHazards,
 					narrowWarningWidth: options.narrowWarningWidth,
 					preloadRouteHazards: options.preloadRouteHazards === true,

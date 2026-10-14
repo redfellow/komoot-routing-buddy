@@ -251,6 +251,10 @@ function evaluate(expression, properties) {
 	const [operator, ...args] = expression;
 	const ev = (value) => evaluate(value, properties);
 	switch (operator) {
+		case "format":
+			return args.filter((value, index) => index % 2 === 0).map(ev).join("");
+		case "concat":
+			return args.map(ev).join("");
 		case "coalesce":
 			return args.map(ev).find((value) => value !== undefined && value !== null);
 		case "max":
@@ -1389,4 +1393,55 @@ test("route snapshots ignore selection changes and invalidate results after geom
 		],
 	});
 	assert.equal(focused, undefined);
+});
+
+function numberedRoad(field = ["get", "name"]) {
+	return { id: "label-road-primary", type: "symbol", source: "thunderforest_outdoors", "source-layer": "road-label",
+		filter: ["has", "name"], minzoom: 12, layout: { "text-field": field, "text-font": ["Satoshi Regular"], "text-size": 11, "symbol-placement": "line" },
+		paint: { "text-color": "#000000", "text-halo-color": "#f8f8f8", "text-halo-width": 2 } };
+}
+test("road numbers are opt-in, preserve names and avoid affecting cycling route references", function () {
+	const f = fixture(), original = numberedRoad();
+	const cycle = { ...copy(original), id: "cycling-shield", "source-layer": "cycling-lowzoom" };
+	f.layers.push(copy(original), cycle);
+	f.configure();
+	assert.deepEqual(f.layers[3], original);
+	f.configure({ emphasizeRoadNumbers: true });
+	const road = f.layers[3];
+	assert.equal(evaluate(road.layout["text-field"], { name: "Kangasalantie", ref: "339" }), "339 · Kangasalantie");
+	assert.equal(evaluate(road.layout["text-field"], { name: "Unnamed number" }), "Unnamed number");
+	assert.deepEqual(road.filter, original.filter);
+	assert.equal(road.minzoom, original.minzoom);
+	assert.deepEqual(road.layout["text-font"], original.layout["text-font"]);
+	assert.deepEqual(cycle, { ...copy(original), id: "cycling-shield", "source-layer": "cycling-lowzoom" });
+	const writes = f.writes();
+	f.restyle();
+	assert.equal(f.writes(), writes);
+	f.configure({ emphasizeRoadNumbers: false });
+	assert.deepEqual(f.layers[3], original);
+});
+test("motorway references are emphasized once and independently of trail colours", function () {
+	const f = fixture(), original = numberedRoad("{ref}");
+	original.id = "label-road-motorway";
+	f.layers.push(copy(original));
+	f.configure({ emphasizeRoadNumbers: true, visualsEnabled: false });
+	assert.equal(evaluate(f.layers[3].layout["text-field"], { ref: "9" }), "9");
+	f.configure({ emphasizeRoadNumbers: false, visualsEnabled: false });
+	assert.deepEqual(f.layers[3], original);
+});
+test("road label zoom expressions remain top-level and replacement styles restore their own labels", function () {
+	const f = fixture(), original = numberedRoad(["step", ["zoom"], ["get", "name"], 15, ["get", "name_latin"]]);
+	f.layers.push(copy(original));
+	f.configure({ emphasizeRoadNumbers: true });
+	const field = f.layers[3].layout["text-field"];
+	assert.equal(field[0], "step");
+	assert.deepEqual(field[1], ["zoom"]);
+	assert.equal(field[3], 15);
+	const replacement = numberedRoad("{name}");
+	replacement.paint["text-color"] = "#ffffff";
+	f.layers[3] = copy(replacement);
+	f.restyle();
+	assert.equal(evaluate(f.layers[3].layout["text-field"], { name: "Road", ref: "3400" }), "3400 · Road");
+	f.configure({ emphasizeRoadNumbers: false });
+	assert.deepEqual(f.layers[3], replacement);
 });
