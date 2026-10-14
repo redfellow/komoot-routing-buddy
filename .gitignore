@@ -10,3 +10,4 @@
 /local-osm-data/
 /.venv-local-osm/
 /scripts/local-osm/__pycache__/
+.DS_Store
