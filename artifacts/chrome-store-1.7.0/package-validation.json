@@ -1,0 +1,15 @@
+{
+  "version": "1.7.0",
+  "sourceCommit": "af9af26999749f41a03a88d09b30b7fff10fa3dc",
+  "bytes": 149853201,
+  "sha256": "39cf436f6b6838689efc4324075ee4c4bfb74e27bd7b81bfa6ccfae87ab9419c",
+  "snapshotAt": "2026-10-13T20:21:31Z",
+  "javascriptTests": 294,
+  "localDataTests": 7,
+  "lintErrors": 0,
+  "lintWarnings": 0,
+  "archiveCRC": "passed",
+  "builtFileComparison": "passed",
+  "onboardingPackaging": "content script, background claim handler and Settings replay included",
+  "uiChecks": "Local preview: three steps, desktop and 390x844 bounds; Brave active content context still reports 1.5.2, awaiting actual extension-card Reload."
+}
