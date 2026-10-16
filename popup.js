@@ -200,7 +200,7 @@ document.querySelector("#restore").addEventListener("click", async function () {
 	document.querySelector("#squadratsOpacityValue").textContent =
 		`${popupSettings.DEFAULT_OPTIONS.squadratsOpacity}%`;
 	document.querySelector("#maximumLevel").value = popupSettings.DEFAULT_OPTIONS.maximumTrailLevel;
-	document.querySelector("#estimateSquadrats").checked = false;
+	document.querySelector("#estimateSquadrats").checked = popupSettings.DEFAULT_OPTIONS.estimateSquadrats;
 	document.querySelector("#squadratsBelowRoads").checked =
 		popupSettings.DEFAULT_OPTIONS.squadratsBelowRoads;
 	document.querySelector("#colourLabels").checked = popupSettings.DEFAULT_OPTIONS.colourLabels;

@@ -24,7 +24,7 @@ Calculate both scales independently. Do not derive new Squadratinhos by multiply
 
 ## Settings and placement
 
-Add `Estimate gained Squadrats` to the Squadrats settings group, off by default. This is separate from its opacity and layer-order controls. Require an available, loaded Squadrats collection; do not introduce new host permissions, account access or background account-data downloads. The master KRB Off switch suspends estimation too.
+Add `Estimate gained Squadrats` to the Squadrats settings group, on by default. This is separate from its opacity and layer-order controls. Require an available, loaded Squadrats collection; do not introduce new host permissions, account access or background account-data downloads. The master KRB Off switch suspends estimation too.
 
 Place a compact `Estimated Squadrats gains` banner immediately after Distance / Ascent / Trails & Technical and before The shape of your ride. Use purple rounded chips, green regular-grid figures and cyan smaller-grid figures, with distinct geometric icons. Keep visible text labels or accessible names rather than relying on icons alone. Use locally authored SVG/CSS icons rather than extracting third-party artwork.
 
@@ -44,9 +44,9 @@ Automated tests cover unique counts, independent grid sizes, diagonal contacts, 
 - `squadrats-estimate.js`: bounded native-data adapter and cancellable sparse award calculations; shared by the page bridge and isolated analysis UI.
 - `map-bridge.js`: read-only access to already loaded Squadrats globals, route-bound requests and collection-generation notifications. An O(1) identity/size check runs with existing map polling and Squadrats source events. It does no tile copying or route processing while the setting or master toggle is off.
 - `ride-dialog.js`: six labelled chips between stats and ride shape, positive gains only, dimension tooltips, partial/unavailable states, cancellation and request-generation checks. Collection changes refresh estimates without rerunning OSM trail checks.
-- `settings.js`, `popup.html`, `popup.js`: normalized opt-in preference, saved through the existing browser sync settings.
+- `settings.js`, `popup.html`, `popup.js`: normalized preference, enabled by default, saved through the existing browser sync settings.
 - Manifest and runtime-file list: load the shared module in the isolated world and make it available to the page bridge. No permissions or hosts were added.
 
 Local preview: `artifacts/squadrats-design/preview.html` (synthetic data, not a real account prediction). New source requires reloading the unpacked extension and the Komoot tab.
 
-Final source verification: 359 non-build JavaScript tests passed, including the existing styling/source-event regressions. Syntax and whitespace checks passed. The new opt-in functionality is not included in the already published 1.8.0 packages. Live account totals and post-ride award agreement remain to be compared after loading the updated source with a ready Squadrats collection.
+Final source verification: 359 non-build JavaScript tests passed, including the existing styling/source-event regressions. Syntax and whitespace checks passed. The new functionality is not included in the already published 1.8.0 packages. Live account totals and post-ride award agreement remain to be compared after loading the updated source with a ready Squadrats collection.

@@ -10,7 +10,7 @@ Map shortcuts: **Space** toggles a temporary satellite inspection view with a 1 
 - Show mapped mud, overgrown sections, fallen trees, obstacles and trail widths.
 - Check trails against your maximum difficulty and minimum width; click a warning to jump to it on the map.
 - Remember your map layers, sidebar and floating panel position.
-- Optionally estimate new Squadrats, Yard and Übersquadrat gains, plus all three Squadratinho variants, in Analyse route using the collection already loaded by the Squadrats extension. Enable **Estimate gained Squadrats** in settings. No extra account requests are made.
+- Optionally estimate new Squadrats, Yard and Übersquadrat gains, plus all three Squadratinho variants, in Analyse route using the collection already loaded by the Squadrats extension. **Estimate gained Squadrats** is on by default and can be disabled in settings. No extra account requests are made.
 - Adjust Squadrats opacity and place its squares below roads and trails. Requires the separate Squadrats extension.
 
 Works on Komoot’s planner, route editing and full-screen map pages. Desktop Chrome/Brave and Firefox packages share the same features. Mobile has not been validated.

@@ -20,7 +20,7 @@
 		preloadRouteHazards: false,
 		squadratsOpacity: 50,
 		squadratsBelowRoads: true,
-		estimateSquadrats: false,
+		estimateSquadrats: true,
 		maximumTrailLevel: "S5",
 		rememberLayers: true,
 		rememberedLayers: {},

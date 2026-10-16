@@ -16,7 +16,7 @@ function fixture() {
 	return { context, messages, reads };
 }
 
-test("estimation is off by default and never reads collection data while master Off", function () {
+test("disabled estimation never reads collection data, including while master Off", function () {
 	const f = fixture();
 	assert.equal(f.context.read({ route: {} }).status, "disabled");
 	assert.equal(f.reads.length, 0);
@@ -70,12 +70,12 @@ test("disabled requests never inspect routes; active requests reject changed rou
 	assert.equal(f.reads.length, 1);
 });
 
-test("estimator is wired into both script worlds and remains opt-in", async function () {
+test("estimator is wired into both script worlds and defaults on", async function () {
 	const manifest = JSON.parse(readFileSync(new URL("../manifest.json", import.meta.url), "utf8")),
 		content = readFileSync(new URL("../content.js", import.meta.url), "utf8"),
 		settings = { KrbBrowser: { storage: { sync: { async get() { return {}; } } } } };
 	runInNewContext(readFileSync(new URL("../settings.js", import.meta.url), "utf8"), settings);
-	assert.equal((await settings.KrbSettings.getOptions()).estimateSquadrats, false);
+	assert.equal((await settings.KrbSettings.getOptions()).estimateSquadrats, true);
 	assert.ok(manifest.content_scripts[0].js.indexOf("squadrats-estimate.js") < manifest.content_scripts[0].js.indexOf("ride-dialog.js"));
 	assert.ok(manifest.web_accessible_resources.some((entry) => entry.resources.includes("squadrats-estimate.js")));
 	assert.ok(content.includes('getURL("squadrats-estimate.js")'));
