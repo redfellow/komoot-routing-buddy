@@ -9,6 +9,7 @@ function fixture({ reducedMotion = false } = {}) {
 	const sources = [], layers = [], cameras = [];
 	let previewClears = 0;
 	const context = {
+		config: { visualsEnabled: true },
 		checkedRouteKey: "current", checkRouteChanged() {}, clearRouteHighlight() {}, console,
 		window: { innerWidth: 1200, matchMedia: () => ({ matches: reducedMotion }) }, setTimeout() { return 1; }, routeHighlightTimer: undefined,
 		routePreviewId: undefined, routePreviewTimer: undefined,

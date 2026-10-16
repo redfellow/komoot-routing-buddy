@@ -4,132 +4,66 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 
 const source = readFileSync(new URL("../content.js", import.meta.url), "utf8");
-const dialogSource = source.slice(
-	source.indexOf("function toggleSettingsDialog("),
-	source.indexOf("function setupPanelControls("),
-);
+const frameSource = source.slice(source.indexOf("function mountPanelSettings("), source.indexOf("function setupPanelControls("));
 
-test("settings open beside the floater, clamp to mobile, close and reuse the same document", function () {
-	let dialog;
-	let reposition;
-	const events = {};
-	function element() {
-		return {
-			style: {},
-			attributes: {},
-			events: {},
-			hidden: false,
-			contentWindow: {},
-			setAttribute(key, value) {
-				this.attributes[key] = value;
-			},
-			addEventListener(key, fn) {
-				this.events[key] = fn;
-			},
-			append(...children) {
-				this.children = children;
-			},
-			querySelector() {
-				return this.children[0];
-			},
-			focus() {
-				this.focused = true;
-			},
-		};
-	}
-	const window = {
-		innerWidth: 390,
-		innerHeight: 700,
-		addEventListener(key, fn) {
-			events[key] = fn;
-		},
-	};
+test("inline settings authenticate iframe messages, bound height and collapse without unloading", function () {
+	const events = {}, sent = [];
+	const frame = { style: {}, contentWindow: { postMessage(message, origin) { sent.push({ message, origin }); } }, addEventListener(name, fn) { this[name] = fn; } };
+	const panel = { open: true, querySelector() { return frame; } };
+	let guides = 0;
 	const context = {
-		window,
-		URL,
-		document: {
-			querySelector() {
-				return dialog;
-			},
-			createElement: element,
-			documentElement: {
-				append(node) {
-					dialog = node;
-				},
-			},
-		},
-		KrbBrowser: {
-			runtime: {
-				getURL() {
-					return "https://extension.test/popup.html";
-				},
-			},
-		},
-		MutationObserver: class {
-			constructor(fn) {
-				reposition = fn;
-			}
-			observe() {}
-		},
+		URL, squadratsAvailable: true,
+		window: { innerHeight: 800, addEventListener(name, fn) { events[name] = fn; } },
+		KrbBrowser: { runtime: { getURL(file) { return `chrome-extension://test/${file}`; } } },
+		KrbOnboarding: { show() { guides++; } },
 	};
-	runInNewContext(dialogSource, context);
-	let rect = { right: 380, top: 80, bottom: 120 };
-	const panel = {
-		getBoundingClientRect() {
-			return rect;
-		},
+	runInNewContext(frameSource, context);
+	context.mountPanelSettings(panel);
+	frame.load();
+	assert.equal(sent[0].message.squadratsAvailable, true);
+	assert.equal(sent[0].origin, "chrome-extension://test");
+	function receive(type, height, origin = "chrome-extension://test", sender = frame.contentWindow) {
+		events.message({ source: sender, origin, data: { type, height } });
+	}
+	receive("KRB_SETTINGS_SIZE", 900, "https://evil.example");
+	assert.equal(frame.style.height, undefined);
+	receive("KRB_SETTINGS_SIZE", 900, "chrome-extension://test", {});
+	assert.equal(frame.style.height, undefined);
+	receive("KRB_SETTINGS_SIZE", 900);
+	assert.equal(frame.style.height, "650px");
+	receive("KRB_SETTINGS_SIZE", 200);
+	assert.equal(frame.style.height, "212px");
+	receive("KRB_CLOSE_SETTINGS");
+	assert.equal(panel.open, false);
+	assert.equal(frame.src, "chrome-extension://test/popup.html");
+	panel.open = true;
+	receive("KRB_SHOW_GUIDE");
+	assert.equal(panel.open, false);
+	assert.equal(guides, 1);
+});
+
+test("road numbers default on while an explicit saved off preference is retained", async function () {
+	let saved = {};
+	const context = { KrbBrowser: { storage: { sync: { async get() { return saved; } } } } };
+	runInNewContext(readFileSync(new URL("../settings.js", import.meta.url), "utf8"), context);
+	assert.equal((await context.KrbSettings.getOptions()).emphasizeRoadNumbers, true);
+	saved = { trailOptions: { emphasizeRoadNumbers: false } };
+	assert.equal((await context.KrbSettings.getOptions()).emphasizeRoadNumbers, false);
+});
+
+
+test("Squadrats controls start hidden and only accept context from their Komoot parent", function () {
+	const popup = readFileSync(new URL("../popup.js", import.meta.url), "utf8");
+	const section = { hidden: true }, parent = {}, events = {};
+	const context = {
+		document: { querySelector() { return section; } },
+		window: { parent, addEventListener(name, fn) { events[name] = fn; } },
 	};
-	const button = element();
-	context.toggleSettingsDialog(panel, button);
-	assert.equal(dialog.style.left, "20px");
-	assert.equal(dialog.style.top, "126px");
-	assert.equal(button.attributes["aria-expanded"], "true");
-	const [close, frame] = dialog.children;
-	close.events.click();
-	assert.equal(dialog.hidden, true);
-	assert.equal(button.focused, true);
-	context.toggleSettingsDialog(panel, button);
-	assert.equal(dialog.hidden, false);
-	assert.equal(dialog.children[1], frame);
-	events.message({
-		source: {},
-		origin: "https://extension.test",
-		data: { type: "KRB_CLOSE_SETTINGS" },
-	});
-	assert.equal(dialog.hidden, false);
-	events.message({
-		source: frame.contentWindow,
-		origin: "https://other.test",
-		data: { type: "KRB_CLOSE_SETTINGS" },
-	});
-	assert.equal(dialog.hidden, false);
-	events.message({
-		source: frame.contentWindow,
-		origin: "https://extension.test",
-		data: { type: "KRB_CLOSE_SETTINGS" },
-	});
-	assert.equal(dialog.hidden, true);
-	window.innerWidth = 320;
-	window.innerHeight = 400;
-	rect = { right: 310, top: 300, bottom: 330 };
-	reposition();
-	assert.equal(dialog.style.width, "304px");
-	assert.equal(dialog.style.height, "auto");
-	assert.equal(dialog.style.maxHeight, "280px");
-	assert.equal(frame.style.height, "150px");
-	assert.equal(dialog.style.left, "8px");
-	assert.equal(dialog.style.top, "114px");
-	events.message({
-		source: frame.contentWindow,
-		origin: "https://extension.test",
-		data: { type: "KRB_SETTINGS_SIZE", height: 600 },
-	});
-	assert.equal(frame.style.height, "250px");
-	assert.equal(dialog.style.top, "14px");
-	events.message({
-		source: frame.contentWindow,
-		origin: "https://extension.test",
-		data: { type: "KRB_SETTINGS_SIZE", height: 100 },
-	});
-	assert.equal(frame.style.height, "100px");
+	runInNewContext(popup.slice(popup.indexOf("function showSquadratsSettings("), popup.indexOf("async function initialise(")), context);
+	events.message({ source: {}, origin: "https://www.komoot.com", data: { type: "KRB_SETTINGS_CONTEXT", squadratsAvailable: true } });
+	assert.equal(section.hidden, true);
+	events.message({ source: parent, origin: "https://www.komoot.com", data: { type: "KRB_SETTINGS_CONTEXT", squadratsAvailable: true } });
+	assert.equal(section.hidden, false);
+	events.message({ source: parent, origin: "https://www.komoot.com", data: { type: "KRB_SETTINGS_CONTEXT", squadratsAvailable: false } });
+	assert.equal(section.hidden, true);
 });

@@ -1,7 +1,7 @@
 // Non-modal guidance only: navigation never invokes analysis or changes a route.
 (function () {
 	const steps = [
-		{ title: "See the trails", text: "Turn trail colours on or off here. Expand Routing Buddy for the colour legend and Settings.", anchor: ".krb-panel__toggle" },
+		{ title: "See the trails", text: "Turn trail colours on or off here. Expand Routing Buddy to change trail colours and settings.", anchor: ".krb-panel__toggle" },
 		{ title: "Understand your ride", text: "Plan a route, then choose Analyse route for terrain, climbing and mapped warnings. Hover to highlight a section; click to zoom.", anchor: ".krb-panel__analyse" },
 		{ title: "Keep useful moments", text: "Preview proposed POIs, tick the points you want and add them to your route. Save in Komoot to keep them.", anchor: ".krb-panel__analyse" },
 	];

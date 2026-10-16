@@ -18,11 +18,12 @@
 	}
 
 	function rememberChange() {
+		if (globalThis.KrbExtensionEnabled === false) return;
 		userChanged = true;
 		window.clearTimeout(saveTimer);
 		saveTimer = window.setTimeout(async function () {
 			const sidebar = readSidebar();
-			if (!sidebar) return;
+			if (!sidebar || globalThis.KrbExtensionEnabled === false) return;
 			try {
 				await globalThis.KrbBrowser.storage.local.set({ sidebarOpen: sidebar.open });
 			}
@@ -64,11 +65,13 @@
 
 	async function restore() {
 		try {
+			const options = await globalThis.KrbSettings?.getOptions?.();
+			if (options?.visualsEnabled === false) return;
 			const saved = await globalThis.KrbBrowser.storage.local.get("sidebarOpen");
 			let attempts = 0;
 			let clicked = false;
 			const timer = window.setInterval(function () {
-				if (userChanged || ++attempts > 40) {
+				if (globalThis.KrbExtensionEnabled === false || userChanged || ++attempts > 40) {
 					window.clearInterval(timer);
 					return;
 				}

@@ -12,10 +12,7 @@ body {
 main {
 	padding: 10px 12px;
 }
-.settings__privacy {
-	font-size: 12px;
-	line-height: 1.4;
-}
+
 .krb-privacy {
 	width: auto;
 	max-width: 760px;
@@ -219,3 +216,13 @@ body.krb-local-data {
 }
 
 .settings__road-numbers { margin: 0 0 12px; color: #657266; font-size: 12px; }
+
+.settings__shortcuts { margin: 12px 0; }
+.settings__shortcuts summary { cursor: pointer; border: 1px solid #c8d0ca; border-radius: 8px; padding: 10px 12px; font-weight: 600; }
+.settings__shortcuts dl { display: grid; grid-template-columns: 100px 1fr; gap: 12px; font-size: 13px; }
+.settings__shortcuts dt, .settings__shortcuts dd { margin: 0; }
+.settings__shortcuts kbd { font-family: inherit; font-weight: 600; }
+
+#status:empty { display: none; }
+.settings__data-link { margin: 6px 0 0; font-size: 12px; }
+.settings__squadrats[hidden] { display: none; }

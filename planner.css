@@ -188,43 +188,6 @@
 #krb-panel {
 	max-width: calc(100vw - 16px);
 }
-#krb-settings-dialog {
-	position: fixed;
-	z-index: 2147483647;
-	box-sizing: border-box;
-	padding-top: 28px;
-	background: #fff;
-	border: 1px solid #bbc6be;
-	border-radius: 18px;
-	overflow: hidden;
-	box-shadow: 0 5px 24px #0004;
-}
-#krb-settings-dialog[hidden] {
-	display: none;
-}
-.krb-settings__close {
-	position: absolute;
-	right: 8px;
-	top: 2px;
-	width: 28px;
-	height: 26px;
-	border: 0;
-	border-radius: 8px;
-	background: transparent;
-	color: #17221c;
-	font: 24px/1 system-ui;
-	cursor: pointer;
-}
-.krb-settings__close:hover {
-	background: #e9efeb;
-}
-.krb-settings__frame {
-	display: block;
-	width: 100%;
-	height: 100%;
-	border: 0;
-}
-
 .krb-panel__hazards {
 	padding: 4px 11px 8px;
 	color: #526059;
@@ -1487,3 +1450,31 @@
 .krb-guide button:focus-visible { outline: 3px solid #527c3b; outline-offset: 3px; }
 .krb-guide__anchor { outline: 3px solid #6c944e !important; outline-offset: 4px; }
 .krb-guide__title:focus { outline: none; }
+
+.krb-shortcut__status {
+	position: fixed;
+	bottom: 24px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 2147483646;
+	max-width: min(520px, 85vw);
+	padding: 10px 16px;
+	border-radius: 10px;
+	background: #203c2b;
+	color: #fff;
+	font: 500 14px/1.4 system-ui, sans-serif;
+	box-shadow: 0 3px 16px #0003;
+	pointer-events: none;
+}
+.krb-shortcut__status:empty { display: none; }
+
+.krb-panel__settings-frame {
+	display: block;
+	width: 100%;
+	height: min(560px, calc(100vh - 150px));
+	max-height: calc(100vh - 150px);
+	border: 0;
+	border-top: 1px solid #e0e5e1;
+	background: #fff;
+}
+#krb-panel > .krb-panel__hazards { display: none; }

@@ -9,13 +9,18 @@
 	<body>
 		<main>
 			<h1>Komoot Routing Buddy</h1>
+			<details class="settings__shortcuts">
+				<summary>Keyboard shortcuts <span aria-hidden="true">ⓘ</span></summary>
+				<p>Use these while the Komoot map is focused.</p>
+				<dl>
+					<dt><kbd>Space</kbd></dt><dd>Toggle satellite inspection: satellite map, 1 px route, trail highlighting, sport maps, heatmaps and Squadrats hidden. Press again to restore the previous view.</dd>
+					<dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Default · NLS · Satellite · OpenStreetMap · OpenCycleMap</dd>
+					<dt><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>T</kbd></dt><dd>Sport-specific maps, in the order shown in Komoot (up to five choices).</dd>
+				</dl>
+				<p>Unavailable maps require the corresponding Komoot access. Shortcuts pause in forms and dialogs. Selecting another map shortcut exits satellite inspection first.</p>
+			</details>
 			<button id="showQuickGuide" class="settings__guide" type="button">Show quick guide</button>
-			<p class="settings__privacy">
-				Preferences may sync through your browser account. Online hazards and trail checks send
-				map or route-area bounds and your IP address to Private.coffee, VK Maps or overpass-api.de.
-				Show hazards is on by default; turn it off below to stop map hazard requests.
-				<a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy policy</a>
-			</p>
+
 			<details class="help">
 				<summary aria-label="How to use trail settings">?</summary>
 				<p>
@@ -24,7 +29,7 @@
 				</p>
 			</details>
 			<label class="setting" for="maximumLevel">
-				<span>Maximum trail level to show</span>
+				<span>Maximum trail level to highlight</span>
 				<select id="maximumLevel">
 					<option value="S0">S0 only</option>
 					<option value="S1">S0–S1</option>
@@ -37,8 +42,7 @@
 			<label class="checkbox-setting"
 				><input id="colourLabels" type="checkbox" /> <span>Colour labels</span></label
 			>
-			<label class="checkbox-setting"><input id="emphasizeRoadNumbers" type="checkbox" /> <span>Emphasize road numbers</span></label>
-			<p class="settings__road-numbers">Make available road numbers easier to read on Komoot’s vector map.</p>
+
 			<div id="rules" aria-label="MTB difficulty rules"></div>
 			<details class="help">
 				<summary aria-label="About avoid rules">?</summary>
@@ -92,6 +96,9 @@
 					opens.
 				</p>
 			</details>
+			<label class="checkbox-setting"><input id="emphasizeRoadNumbers" type="checkbox" /> <span>Emphasize road numbers</span></label>
+			<p class="settings__road-numbers">Make available road numbers easier to read on Komoot’s vector map.</p>
+			<section id="squadratsSettings" class="settings__squadrats" hidden>
 			<label class="checkbox-setting"
 				><input id="squadratsBelowRoads" type="checkbox" />
 				<span>Show Squadrats below roads and trails</span></label
@@ -114,16 +121,17 @@
 			<details class="help">
 				<summary aria-label="About Squadrats opacity">?</summary>
 				<p id="squadratsHint">
-					Fade collected squares. New squares stay twice as visible, up to their original opacity.
+					Fade collected squares and grid lines. New-route squares stay twice as visible, up to their native opacity.
 					Requires the Squadrats extension.
 				</p>
 			</details>
+			</section>
 			<div class="settings__actions">
 				<button id="restore" type="button">Restore suggested rules</button>
 				<button type="button" id="clearOsmCache">Clear OSM cache</button>
 			</div>
 			<p id="status" role="status" aria-live="polite"></p>
-			<p><a href="local-data.html" target="_blank" rel="noopener">Local Finland data</a></p>
+			<p class="settings__data-link"><a href="local-data.html" target="_blank" rel="noopener">Local Finland data</a></p>
 		</main>
 		<script src="browser-api.js"></script>
 		<script src="settings.js"></script>

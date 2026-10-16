@@ -4,7 +4,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 const source = fs.readFileSync(new URL("../sidebar.js", import.meta.url), "utf8");
 
-async function setup(saved, initial = true) {
+async function setup(saved, initial = true, enabled = true) {
 	let open = initial;
 	let clicks = 0;
 	let tick;
@@ -30,7 +30,9 @@ async function setup(saved, initial = true) {
 			return button;
 		},
 	};
-	vm.runInNewContext(source, {
+	const context = {
+		KrbExtensionEnabled: enabled,
+		KrbSettings: { async getOptions() { return { visualsEnabled: enabled }; } },
 		location: { pathname: "/tour/123/zoom" },
 		console,
 		document: {
@@ -66,7 +68,8 @@ async function setup(saved, initial = true) {
 				},
 			},
 		},
-	});
+	};
+	vm.runInNewContext(source, context);
 	await new Promise(setImmediate);
 	return {
 		tick() {
@@ -75,6 +78,7 @@ async function setup(saved, initial = true) {
 		save() {
 			return save?.();
 		},
+		setEnabled(value) { context.KrbExtensionEnabled = value; },
 		events,
 		button,
 		writes,
@@ -144,4 +148,21 @@ test("initial visit remembers current state without toggling", async function ()
 	await state.save();
 	assert.equal(state.clicks(), 0);
 	assert.deepEqual(state.writes, [true]);
+});
+
+
+test("master Off prevents sidebar restoration and remembering native interactions", async function () {
+	const f = await setup(false, true, false);
+	f.tick();
+	assert.equal(f.clicks(), 0);
+	f.events.click({ isTrusted: true, target: f.button });
+	await f.save();
+	assert.deepEqual(f.writes, []);
+});
+
+test("switching Off cancels pending sidebar restoration", async function () {
+	const f = await setup(false);
+	f.setEnabled(false);
+	f.tick();
+	assert.equal(f.clicks(), 0);
 });

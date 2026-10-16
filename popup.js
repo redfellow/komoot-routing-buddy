@@ -202,7 +202,7 @@ document.querySelector("#restore").addEventListener("click", async function () {
 	document.querySelector("#squadratsBelowRoads").checked =
 		popupSettings.DEFAULT_OPTIONS.squadratsBelowRoads;
 	document.querySelector("#colourLabels").checked = popupSettings.DEFAULT_OPTIONS.colourLabels;
-	document.querySelector("#emphasizeRoadNumbers").checked = false;
+	document.querySelector("#emphasizeRoadNumbers").checked = popupSettings.DEFAULT_OPTIONS.emphasizeRoadNumbers;
 	document.querySelector("#showHazards").checked = popupSettings.DEFAULT_OPTIONS.showHazards;
 	document.querySelector("#preloadRouteHazards").checked = false;
 	document.querySelector("#rememberLayers").checked = popupSettings.DEFAULT_OPTIONS.rememberLayers;
@@ -249,7 +249,26 @@ async function saveSquadrats() {
 	await squadratsWrites;
 }
 
+function showSquadratsSettings(available) {
+	document.querySelector("#squadratsSettings").hidden = available !== true;
+}
+
+window.addEventListener("message", function (event) {
+	if (event.source !== window.parent || event.origin !== "https://www.komoot.com") return;
+	if (event.data?.type === "KRB_SETTINGS_CONTEXT") showSquadratsSettings(event.data.squadratsAvailable);
+});
+
 async function initialise() {
+	if (window.parent === window) {
+		try {
+			const [tab] = await globalThis.KrbBrowser.tabs.query({ active: true, currentWindow: true });
+			if (tab?.id) {
+				const context = await globalThis.KrbBrowser.tabs.sendMessage(tab.id, { type: "KRB_GET_MAP_CONTEXT" });
+				showSquadratsSettings(context?.squadratsAvailable);
+			}
+		}
+		catch (error) { console.debug("Squadrats map context unavailable:", error.message); }
+	}
 	if (window.parent !== window) {
 		const main = document.querySelector("main");
 		const reportSize = function () {

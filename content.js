@@ -1,6 +1,86 @@
 // Connect the Komoot page, floating controls and extension-owned settings/data APIs.
 (function () {
 	if (!/^\/(?:tour\/[^/]+\/(?:zoom|edit)|plan(?:\/.*)?)$/.test(location.pathname)) return;
+	// Keyboard commands are serialised so rapid toggles cannot overwrite a saved view.
+	(function () {
+		const MAPS = Object.freeze(["Default", "NLS Map", "Satellite", "OpenStreetMap", "OpenCycleMap"]);
+		const SPORTS = Object.freeze(["None", "Hiking", "Cycling", "MTB", "Sport map 5"]);
+		class ShortcutError extends Error {
+			constructor(message) {
+				super(message);
+				this.name = "ShortcutError";
+			}
+		}
+		function command(event) {
+			if (event.defaultPrevented || event.repeat || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+			const key = event.key?.toLowerCase();
+			for (const node of event.composedPath?.() || [event.target]) {
+				if (node?.isContentEditable || node?.closest?.("input, textarea, select, [role=textbox], [role=combobox], [role=slider], [role=dialog], dialog, .krb-ride")) return;
+				// Number/letter map commands still work after clicking a map or
+				// floater button. Space must retain native button/link activation.
+				if (key === " " && node?.closest?.("button, a, [role=button], [role=menuitem], [role=option], [role=tab], [role=switch], [role=checkbox], [role=radio], #krb-panel")) return;
+			}
+			if (key === " ") return { kind: "inspection" };
+			if (/^[1-5]$/.test(key)) return { kind: "mapType", label: MAPS[Number(key) - 1] };
+			const sport = "qwert".indexOf(key);
+			if (key?.length === 1 && sport >= 0) return { kind: "sportMap", label: SPORTS[sport], index: sport };
+		}
+		function createController(adapter) {
+			let snapshot, pending = Promise.resolve();
+			async function restore() {
+				if (!snapshot) return;
+				// Keep the snapshot until all native controls have been restored successfully.
+				await adapter.select(snapshot);
+				adapter.inspect(false);
+				snapshot = undefined;
+				adapter.announce("Previous map view restored.");
+			}
+			async function execute(action) {
+				if (action.kind === "inspection") {
+					if (snapshot) return restore();
+					snapshot = await adapter.snapshot();
+					try {
+						adapter.inspect(true);
+						await adapter.select({ heatmap: "None", sportMap: "None", mapType: "Satellite" });
+						adapter.announce("Satellite inspection. Press Space to restore your view.");
+					}
+					catch (error) {
+						try { await restore(); }
+						catch (restoreError) { console.warn("Map view restore needs another Space press:", restoreError.message); }
+						throw error;
+					}
+				}
+				else {
+					await restore();
+					const label = await adapter.select({ [action.kind]: action.label }, action);
+					adapter.announce(`${typeof label === "string" ? label : action.label} selected.`);
+				}
+			}
+			function handle(event) {
+				const action = command(event);
+				if (!action || !adapter.ready()) return false;
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				pending = pending.then(async function () {
+						try {
+						if (!adapter.ready()) return;
+						adapter.announce(action.kind === "inspection" ? (snapshot ? "Restoring previous map view…" : "Preparing satellite inspection…") : `Switching to ${action.label}…`);
+						await execute(action);
+					}
+					catch (error) { adapter.announce(error.message || "Map shortcut unavailable."); }
+				});
+				return true;
+			}
+			function suspend() {
+				const operation = pending.then(restore);
+				pending = operation.catch((error) => adapter.announce(error.message || "Could not restore the previous map view."));
+				return operation;
+			}
+			return { handle, idle: () => pending, active: () => Boolean(snapshot), restore, suspend };
+		}
+		globalThis.KrbMapShortcuts = { MAPS, SPORTS, command, createController, ShortcutError };
+	})();
+	// End keyboard controller.
 	const contentSettings = globalThis.KrbSettings;
 
 	const AVOID_COLOUR = "#7a1016";
@@ -10,6 +90,8 @@
 	let viewportRequests = 0;
 	let routePreloadWork = Promise.resolve();
 	let mapReady = false;
+	let extensionEnabled = true;
+	let squadratsAvailable = false;
 	let routeCheckActive = false;
 	function updatePanelReadiness() {
 		const panel = document.querySelector("#krb-panel");
@@ -67,6 +149,8 @@
 		}
 		if (event.data?.type === "KRB_MAP_STATUS") {
 			mapReady = event.data.detail?.ready === true && !event.data.detail?.error;
+			squadratsAvailable = event.data.detail?.squadratsAvailable === true;
+			document.querySelector(".krb-panel__settings-frame")?.contentWindow?.postMessage({ type: "KRB_SETTINGS_CONTEXT", squadratsAvailable }, globalThis.KrbBrowser.runtime.getURL("").replace(/\/$/, ""));
 			updatePanelReadiness();
 		}
 		if (event.data?.type === "KRB_PRELOAD_ROUTE") {
@@ -147,6 +231,7 @@
 
 	let latestHazardStatus;
 	function renderHazardStatus(data) {
+		if (!extensionEnabled) data = { state: "idle", text: "" };
 		latestHazardStatus = data;
 		const panel = document.querySelector("#krb-panel");
 		if (!panel) return;
@@ -229,7 +314,7 @@
 		if (document.querySelector("#krb-panel")) return;
 		const panel = document.createElement("details");
 		panel.id = "krb-panel";
-		panel.open = state?.open !== false;
+		panel.open = false;
 		panel.innerHTML = `
 			<summary>
 				<span class="krb-panel__drag" aria-hidden="true">
@@ -265,22 +350,12 @@
 				<span class="krb-panel__tools"></span>
 				<span class="krb-panel__caret" aria-hidden="true">⌄</span>
 			</summary>
-			<div class="krb-panel__legend"></div>
-			<div class="krb-panel__hazards" hidden></div>
-			<div class="krb-panel__footer">
-				<button
-					type="button"
-					class="krb-panel__settings"
-					aria-label="Open Routing Buddy settings"
-					title="Open settings"
-				>
-					Settings
-				</button>
-			</div>
+			<iframe class="krb-panel__settings-frame" title="Routing Buddy settings"></iframe>
 		`;
 		document.documentElement.append(panel);
 		updatePanelReadiness();
 		setupPanelControls(panel, state || {});
+		mountPanelSettings(panel);
 		globalThis.KrbRideDialog?.attach(panel);
 		globalThis.KrbOnboarding?.attach(panel);
 		globalThis.KrbOnboarding?.setReady(mapReady);
@@ -320,90 +395,29 @@
 		panel.querySelector("summary").addEventListener("pointerdown", hide);
 	}
 
-	function toggleSettingsDialog(panel, settings) {
-		let dialog = document.querySelector("#krb-settings-dialog");
-		if (dialog) {
-			dialog.hidden = !dialog.hidden;
-			settings.setAttribute("aria-expanded", String(!dialog.hidden));
-			if (!dialog.hidden) dialog.querySelector("button").focus();
-			return;
-		}
-		dialog = document.createElement("section");
-		dialog.id = "krb-settings-dialog";
-		dialog.setAttribute("role", "dialog");
-		dialog.setAttribute("aria-label", "Routing Buddy settings");
-		const close = document.createElement("button");
-		close.className = "krb-settings__close";
-		close.type = "button";
-		close.textContent = "×";
-		close.setAttribute("aria-label", "Close settings");
-		const frame = document.createElement("iframe");
-		frame.className = "krb-settings__frame";
-		frame.title = "Routing Buddy settings";
+	function mountPanelSettings(panel) {
+		const frame = panel.querySelector(".krb-panel__settings-frame");
 		frame.src = globalThis.KrbBrowser.runtime.getURL("popup.html");
-		dialog.append(close, frame);
-		document.documentElement.append(dialog);
-		settings.setAttribute("aria-expanded", "true");
-		function dismiss() {
-			// Keep the settings document alive so pending saves finish after closing.
-			dialog.hidden = true;
-			settings.setAttribute("aria-expanded", "false");
-			settings.focus();
+		const settingsOrigin = globalThis.KrbBrowser.runtime.getURL("").replace(/\/$/, "");
+		function sendContext() {
+			frame.contentWindow?.postMessage({ type: "KRB_SETTINGS_CONTEXT", squadratsAvailable }, settingsOrigin);
 		}
-		close.addEventListener("click", dismiss);
-		dialog.addEventListener("keydown", function (event) {
-			if (event.key === "Escape") {
-				event.stopPropagation();
-				dismiss();
-			}
-		});
-		let settingsHeight = 150;
+		frame.addEventListener("load", sendContext);
 		window.addEventListener("message", function (event) {
-			if (event.source !== frame.contentWindow) return;
-			if (event.origin !== new URL(frame.src).origin) return;
-			if (
-				event.data?.type === "KRB_SETTINGS_SIZE" &&
-				Number.isFinite(event.data.height) &&
-				event.data.height > 0
-			) {
-				settingsHeight = Math.ceil(event.data.height);
-				positionDialog();
+			if (event.source !== frame.contentWindow || event.origin !== settingsOrigin) return;
+			if (event.data?.type === "KRB_SETTINGS_SIZE" && Number.isFinite(event.data.height)) {
+				frame.style.height = `${Math.max(120, Math.min(event.data.height + 12, window.innerHeight - 150))}px`;
 			}
-			else if (event.data?.type === "KRB_CLOSE_SETTINGS") dismiss();
+			else if (event.data?.type === "KRB_CLOSE_SETTINGS") panel.open = false;
 			else if (event.data?.type === "KRB_SHOW_GUIDE") {
-				dismiss();
+				panel.open = false;
 				globalThis.KrbOnboarding?.show();
 			}
 		});
-		function positionDialog() {
-			const rect = panel.getBoundingClientRect();
-			const width = Math.min(360, window.innerWidth - 16);
-			const maxHeight = Math.min(Math.floor(window.innerHeight * 0.7), window.innerHeight - 16);
-			const height = Math.min(settingsHeight + 30, maxHeight);
-			dialog.style.width = `${width}px`;
-			dialog.style.height = "auto";
-			dialog.style.maxHeight = `${maxHeight}px`;
-			frame.style.height = `${Math.max(0, height - 30)}px`;
-			dialog.style.left = `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`;
-			const top =
-				rect.bottom + 6 + height <= window.innerHeight - 8
-					? rect.bottom + 6
-					: rect.top - height - 6;
-			dialog.style.top = `${Math.max(8, Math.min(top, window.innerHeight - height - 8))}px`;
-		}
-		positionDialog();
-		// Follow dragging, expanding/collapsing, and viewport changes.
-		new MutationObserver(positionDialog).observe(panel, {
-			attributes: true,
-			attributeFilter: ["style", "open"],
-		});
-		window.addEventListener("resize", positionDialog);
-		close.focus();
 	}
 
 	function setupPanelControls(panel, state = {}) {
 		const header = panel.querySelector("summary");
-		const settings = panel.querySelector(".krb-panel__settings");
 		const toggle = panel.querySelector(".krb-panel__toggle");
 		toggle.addEventListener("click", async function (event) {
 			event.preventDefault();
@@ -499,11 +513,6 @@
 			const rect = panel.getBoundingClientRect();
 			movePanel(rect.left, rect.top);
 		});
-		settings.addEventListener("click", function (event) {
-			event.preventDefault();
-			event.stopPropagation();
-			toggleSettingsDialog(panel, settings);
-		});
 	}
 
 	function difficultySelector(level) {
@@ -583,6 +592,7 @@
 	];
 
 	async function rememberHeatmapSport(event) {
+		if (!extensionEnabled) return;
 		if (restoringLayers || !document.body.innerText.includes("Heatmap settings")) return;
 		let node = event.target;
 		while (node && node !== document.body) {
@@ -603,6 +613,7 @@
 	}
 
 	async function rememberLayerClick(event) {
+		if (!extensionEnabled) return;
 		if (restoringLayers) return;
 		const element = event.target.closest("button, [role=menuitem], [role=option], label");
 		if (!element || element.closest("#krb-panel")) return;
@@ -803,6 +814,114 @@
 		}, 350);
 	}
 
+	async function shortcutWait(find, timeout = 4000) {
+		const deadline = Date.now() + timeout;
+		while (Date.now() < deadline) {
+			const result = find();
+			if (result) return result;
+			await new Promise((resolve) => window.setTimeout(resolve, 100));
+		}
+		throw new globalThis.KrbMapShortcuts.ShortcutError("Komoot map controls are unavailable. Try again when the map has loaded.");
+	}
+	function selectedLayer(kind) {
+		return [...document.querySelectorAll("button[aria-label]")].find(function (button) {
+			return layerKind(button) === kind && (button.classList.contains("selected") || button.getAttribute("aria-pressed") === "true" || button.getAttribute("aria-checked") === "true");
+		});
+	}
+	async function shortcutLayerSheet() {
+		if (findLayerOption("mapType", "Default")) return;
+		const opener = findLayerMenuOpener();
+		if (!opener) throw new globalThis.KrbMapShortcuts.ShortcutError("Open the Komoot map to use map shortcuts.");
+		opener.click();
+		await shortcutWait(() => findLayerOption("mapType", "Default"));
+	}
+	async function withShortcutLayers(operation) {
+		await shortcutWait(() => !restoringLayers, 18000);
+		restoringLayers = true;
+		const reveal = hideRestorationSheets(), focus = document.activeElement;
+		try {
+			await shortcutLayerSheet();
+			return await operation();
+		}
+		finally {
+			await new Promise((resolve) => closeLayerSheetWhenAvailable(resolve));
+			reveal();
+			restoringLayers = false;
+			if (focus?.isConnected && !focus.closest?.(".krb-restoration__sheet")) focus.focus?.({ preventScroll: true });
+		}
+	}
+	function announceShortcut(text) {
+		let status = document.getElementById("krb-shortcut-status");
+		if (!status) {
+			status = document.createElement("div");
+			status.id = "krb-shortcut-status";
+			status.className = "krb-shortcut__status";
+			status.setAttribute("role", "status");
+			status.setAttribute("aria-live", "polite");
+			document.documentElement.append(status);
+		}
+		status.textContent = text;
+		window.clearTimeout(announceShortcut.timer);
+		announceShortcut.timer = window.setTimeout(function () { status.textContent = ""; }, 3500);
+	}
+	const mapShortcuts = globalThis.KrbMapShortcuts?.createController({
+		ready() {
+			return /^\/(?:tour\/[^/]+\/(?:zoom|edit)|plan(?:\/.*)?)$/.test(location.pathname) && mapReady && extensionEnabled && !document.querySelector("#krb-panel[open]") &&
+				!document.querySelector("dialog[open], [aria-modal=true]:not([hidden])");
+		},
+		async snapshot() {
+			return withShortcutLayers(function () {
+				const state = {};
+				for (const kind of ["mapType", "sportMap", "heatmap"]) {
+					const selected = selectedLayer(kind);
+					if (!selected) throw new globalThis.KrbMapShortcuts.ShortcutError("Could not read the current map choices; satellite inspection was not started.");
+					state[kind] = layerLabel(selected);
+				}
+				return state;
+			});
+		},
+		async select(state, action) {
+			let chosenLabel;
+			const chosen = {};
+			await withShortcutLayers(async function () {
+				for (const kind of ["heatmap", "sportMap", "mapType"]) {
+					if (!state[kind]) continue;
+					await shortcutLayerSheet();
+					let option = findLayerOption(kind, state[kind]);
+					if (action?.kind === "sportMap" && Number.isInteger(action.index)) {
+						option = [...document.querySelectorAll("button[aria-label]")].filter((button) => layerKind(button) === "sportMap")[action.index];
+					}
+					if (!option || option.disabled || option.getAttribute("aria-disabled") === "true")
+						throw new globalThis.KrbMapShortcuts.ShortcutError(`${state[kind]} is not available for this map or account.`);
+					const label = layerLabel(option);
+					chosen[kind] = label;
+					chosenLabel = label;
+					if (selectedLayer(kind) === option) continue;
+					option.click();
+					// Heatmap selection can open its settings sheet. Return to the layer chooser.
+					if (kind === "heatmap" && label !== "None") {
+						await shortcutWait(() => !option.isConnected || findHeatmapSport("All sports"));
+						await shortcutLayerSheet();
+					}
+					await shortcutWait(() => selectedLayer(kind) && layerLabel(selectedLayer(kind)) === label);
+				}
+			});
+			if (action) {
+				const options = await contentSettings.getOptions();
+				if (options.rememberLayers) await globalThis.KrbBrowser.storage.sync.set({ trailOptions: {
+					...options, rememberedLayers: { ...options.rememberedLayers, ...chosen },
+				} });
+			}
+			return chosenLabel;
+		},
+		inspect(active) {
+			window.postMessage({ type: "KRB_INSPECTION_MODE", active }, location.origin);
+		},
+		announce: announceShortcut,
+	});
+	window.addEventListener("keydown", function (event) { mapShortcuts?.handle(event); }, true);
+
+
 	async function refresh(shouldRestore = false, previewColours, squadratsOpacity) {
 		const [rules, options, savedColours] = await Promise.all([
 			contentSettings.getRules(),
@@ -816,19 +935,35 @@
 		renderLegend(rules, options.maximumTrailLevel, colours);
 		const panel = document.querySelector("#krb-panel");
 		const enabled = options.visualsEnabled !== false;
+		extensionEnabled = enabled;
+		globalThis.KrbExtensionEnabled = enabled;
+		const analyseButton = panel.querySelector(".krb-panel__analyse");
+		if (analyseButton) analyseButton.disabled = !enabled;
+		if (!enabled) {
+			globalThis.KrbRideDialog?.suspend();
+			routePreloadGeneration++;
+		}
 		const toggle = panel.querySelector(".krb-panel__toggle");
 		toggle.setAttribute("aria-checked", String(enabled));
 		toggle.textContent = enabled ? "On" : "Off";
 		panel.classList.toggle("krb-panel--disabled", !enabled);
 		if (!enabled) document.getElementById(STYLE_ID)?.remove();
-		if (!options.showHazards) renderHazardStatus({ state: "idle", text: "" });
+		if (!enabled || !options.showHazards) renderHazardStatus({ state: "idle", text: "" });
 		else if (!latestHazardStatus?.text)
 			renderHazardStatus({ state: "loading", text: "Connecting to OSM map…" });
 		sendMapConfig(rules, options, colours);
-		if (shouldRestore) restoreLayers(options);
+		if (!enabled) {
+			try { await mapShortcuts?.suspend(); }
+			catch (error) { console.warn("Could not restore the previous map selection:", error.message); }
+		}
+		if (enabled && shouldRestore) restoreLayers(options);
 	}
 
 	globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+		if (sender.id === globalThis.KrbBrowser.runtime.id && message?.type === "KRB_GET_MAP_CONTEXT") {
+			sendResponse({ squadratsAvailable });
+			return;
+		}
 		if (sender.id === globalThis.KrbBrowser.runtime.id && message?.type === "KRB_SHOW_GUIDE") {
 			sendResponse({ shown: globalThis.KrbOnboarding?.show() === true });
 			return;

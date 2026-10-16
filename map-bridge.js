@@ -225,7 +225,38 @@
 		if (!same(map.getLayoutProperty(id, property), value))
 			map.setLayoutProperty(id, property, value ?? null);
 	}
-	// Reuse Komoot's numbered-road labels and keep native zoom/collision rules.
+	// Stretch only the centre so borders and corners stay crisp around longer refs.
+	function installRoadShields() {
+		for (const [kind, colour] of Object.entries({ main: [209, 88, 88], national: [239, 196, 64], regional: [255, 255, 255], local: [58, 105, 175], unknown: [82, 91, 101] })) {
+			const id = `krb-road-shield-${kind}`;
+			if (map.hasImage(id)) continue;
+			const width = 40, height = 32, data = new Uint8Array(width * height * 4);
+			for (let y = 0; y < height; y++) {
+				for (let x = 0; x < width; x++) {
+					const dx = Math.max(Math.abs(x + 0.5 - width / 2) - 12, 0),
+						dy = Math.max(Math.abs(y + 0.5 - height / 2) - 8, 0),
+						edge = 8 - Math.hypot(dx, dy), offset = (y * width + x) * 4,
+						border = kind === "national" || kind === "regional" ? [35, 45, 50] : [255, 255, 255],
+						rgb = edge >= 1 && edge < 2 ? border : colour;
+					data.set([...rgb, Math.round(Math.max(0, Math.min(1, edge)) * 255)], offset);
+				}
+			}
+			map.addImage(id, { width, height, data }, { pixelRatio: 2, stretchX: [[12, 28]], stretchY: [[8, 24]], content: [4, 4, 36, 28] });
+		}
+	}
+	// Finnish-style reference categories take precedence over physical highway class.
+	function roadShieldClass(layer) {
+		const roadClass = ["coalesce", ["get", "highway"], ["get", "class"], ["get", "type"], layer.id.replace(/^label-road-/, "").split("-")[0]];
+		const fallback = ["match", roadClass,
+			["motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link"], "main",
+			["secondary", "secondary_link", "tertiary", "tertiary_link", "minor", "unclassified", "residential", "service"], "local", "unknown"];
+		const ref = ["to-string", ["coalesce", ["get", "ref"], ""]], number = ["to-number", ref, 0];
+		return ["case", ["all", ["==", ["to-string", number], ref], ["<=", 1, number]],
+			["case", ["<=", number, 39], "main", ["<=", number, 99], "national", ["<=", number, 999], "regional", ["<=", number, 9999], "local", "unknown"], fallback];
+	}
+	function removeRoadShield(saved) {
+		if (map.getLayer(saved.shieldId)) map.removeLayer(saved.shieldId);
+	}
 	function applyRoadNumbers() {
 		const layers = (map.getStyle()?.layers || []).filter(function (layer) {
 			return layer.type === "symbol" && layer["source-layer"] === "road-label" &&
@@ -233,55 +264,107 @@
 		});
 		const ids = new Set(layers.map((layer) => layer.id));
 		for (const [id, saved] of roadNumberOriginals) {
-			if (!ids.has(id) || saved.layer !== map.getLayer(id)) roadNumberOriginals.delete(id);
+			if (!ids.has(id) || saved.layer !== map.getLayer(id)) {
+				removeRoadShield(saved);
+				roadNumberOriginals.delete(id);
+			}
 		}
-		if (config.emphasizeRoadNumbers !== true) {
+		if (config.visualsEnabled === false || config.emphasizeRoadNumbers !== true) {
 			for (const [id, saved] of roadNumberOriginals) {
+				removeRoadShield(saved);
 				setLayout(id, "text-field", saved.field);
-				for (const [property, value] of Object.entries(saved.paint)) setPaint(id, property, value);
 			}
 			roadNumberOriginals.clear();
 			return;
 		}
-		const ref = ["to-string", ["coalesce", ["get", "ref"], ""]];
-		const hasRef = ["!=", ref, ""];
+		installRoadShields();
+		const ref = ["to-string", ["coalesce", ["get", "ref"], ""]], hasRef = ["!=", ref, ""];
 		for (const layer of layers) {
 			if (!roadNumberOriginals.has(layer.id)) {
-				roadNumberOriginals.set(layer.id, {
-					layer: map.getLayer(layer.id),
-					field: structuredClone(map.getLayoutProperty(layer.id, "text-field")),
-					paint: Object.fromEntries(["text-color", "text-halo-color", "text-halo-width"].map(function (property) {
-						return [property, structuredClone(getPaint(layer.id, property))];
-					})),
-				});
+				roadNumberOriginals.set(layer.id, { layer: map.getLayer(layer.id),
+					field: structuredClone(map.getLayoutProperty(layer.id, "text-field")), shieldId: `krb-road-number-${layer.id}` });
 			}
-			const saved = roadNumberOriginals.get(layer.id);
-			const field = transformStops(saved.field, function (value) {
-				// Legacy token strings need conversion before use inside expressions.
-				let native = value;
-				if (typeof value === "string" && /\{[^}]+\}/.test(value)) {
-					const parts = value.split(/(\{[^}]+\})/).filter(Boolean).map(function (part) {
-						return /^\{[^}]+\}$/.test(part) ? ["to-string", ["coalesce", ["get", part.slice(1, -1)], ""]] : part;
-					});
-					native = parts.length === 1 ? parts[0] : ["concat", ...parts];
-				}
-				const referenceOnly = value === "{ref}" || JSON.stringify(value) === '["get","ref"]';
-				const emphasized = referenceOnly ? ["format", ref, { "font-scale": 1.35 }] :
-					["format", ref, { "font-scale": 1.35 }, " · ", {}, native, {}];
-				return ["case", hasRef, emphasized, ["format", native, {}]];
-			}, ["get", "name"]);
-			setLayout(layer.id, "text-field", field);
-			setPaint(layer.id, "text-color", transformStops(saved.paint["text-color"], function (value) {
-				return ["case", hasRef, "#183f20", value];
-			}, "#333333"));
-			setPaint(layer.id, "text-halo-color", transformStops(saved.paint["text-halo-color"], function (value) {
-				return ["case", hasRef, "#ffffff", value];
-			}, "rgba(0,0,0,0)"));
-			setPaint(layer.id, "text-halo-width", transformStops(saved.paint["text-halo-width"], function (value) {
-				return ["case", hasRef, 2, value];
-			}, 0));
+			const saved = roadNumberOriginals.get(layer.id), kind = roadShieldClass(layer),
+				referenceOnly = JSON.stringify(saved.field).includes("ref") && !JSON.stringify(saved.field).includes("name");
+			// Keep street names in their native layer; replace existing ref-only labels.
+			if (referenceOnly) setLayout(layer.id, "text-field", "");
+			if (map.getLayer(saved.shieldId)) continue;
+			const shield = { id: saved.shieldId, type: "symbol", source: layer.source, "source-layer": layer["source-layer"],
+				layout: {
+					"symbol-placement": layer.layout["symbol-placement"] || "line",
+					"symbol-spacing": 600,
+					"text-padding": 12,
+					"icon-padding": 3,
+					"text-field": ["case", hasRef, ref, ""],
+					"text-font": Array.isArray(layer.layout["text-font"]) && layer.layout["text-font"].every((font) => typeof font === "string")
+						? layer.layout["text-font"].map((font) => font === "Satoshi Regular" ? "Satoshi Bold" : font)
+						: layer.layout["text-font"] || ["Open Sans Regular"],
+					"text-size": transformStops(layer.layout["text-size"], function (value) {
+						return ["*", value, ["match", kind, "main", 1.05, "national", 1, "local", 0.75, 0.9]];
+					}, 11),
+					"text-offset": referenceOnly ? [0, 0] : [0, -1.4],
+					"text-rotation-alignment": "viewport",
+					"icon-rotation-alignment": "viewport",
+					"icon-image": ["case", hasRef, ["match", kind, "main", "krb-road-shield-main", "national", "krb-road-shield-national", "regional", "krb-road-shield-regional", "local", "krb-road-shield-local", "krb-road-shield-unknown"], ""],
+					"icon-text-fit": "both", "icon-text-fit-padding": [1, 2, 1, 2],
+				}, paint: { "text-color": ["match", kind, ["national", "regional"], "#232d32", "#ffffff"], "text-halo-width": 0 } };
+			for (const property of ["minzoom", "maxzoom", "filter"]) {
+				if (layer[property] !== undefined) shield[property] = structuredClone(layer[property]);
+			}
+			// Give emphasized numbers priority over native one-way arrows and labels.
+			map.addLayer(shield);
 		}
 	}
+
+	let inspectionMode = false;
+	const inspectionOriginals = new Map();
+	function applyInspection() {
+		for (const [id, saved] of inspectionOriginals) {
+			if (map.getLayer(id) !== saved.layer) inspectionOriginals.delete(id);
+		}
+		if (!inspectionMode) {
+			for (const [id, saved] of inspectionOriginals) {
+				for (const [property, value] of Object.entries(saved.paint)) setPaint(id, property, value);
+				if (saved.hidden) setLayout(id, "visibility", saved.visibility);
+			}
+			inspectionOriginals.clear();
+			return;
+		}
+		const mainRoute = map.getLayer("komoot-tour-routed");
+		let routeColour = mainRoute && (inspectionOriginals.get(mainRoute.id)?.paint["line-color"] ?? getPaint(mainRoute.id, "line-color"));
+		while (Array.isArray(routeColour) && ["case", "match", "step"].includes(routeColour[0])) routeColour = routeColour.at(-1);
+		routeColour ??= "rgba(0, 88, 202, 1)";
+		for (const layer of map.getStyle()?.layers || []) {
+			const route = layer.source === "komoot_tour" && layer.type === "line",
+				hidden = layer.id.startsWith("squadrats-") || /heatmap/i.test(`${layer.id} ${layer.source || ""}`) ||
+					["komoot_tour_surface", "komoot_original_track"].includes(layer.source) ||
+					(layer.source === "komoot_tour" && (/-border$/.test(layer.id) || layer.type === "symbol"));
+			if (!route && !hidden) continue;
+			let saved = inspectionOriginals.get(layer.id);
+			if (!saved) {
+				saved = { layer: map.getLayer(layer.id), paint: {}, hidden, visibility: structuredClone(map.getLayoutProperty(layer.id, "visibility")) };
+				if (route) {
+					for (const property of ["line-width", "line-gap-width", "line-blur", "line-color", "line-opacity", "line-offset", "line-dasharray", "line-pattern", "line-gradient", "line-translate"])
+						saved.paint[property] = structuredClone(getPaint(layer.id, property));
+				}
+				inspectionOriginals.set(layer.id, saved);
+			}
+			if (route) {
+				setPaint(layer.id, "line-width", 1);
+				setPaint(layer.id, "line-gap-width", 0);
+				setPaint(layer.id, "line-blur", 0);
+				setPaint(layer.id, "line-color", routeColour);
+				setPaint(layer.id, "line-opacity", 1);
+				setPaint(layer.id, "line-offset", 0);
+				setPaint(layer.id, "line-dasharray", undefined);
+				setPaint(layer.id, "line-pattern", undefined);
+				setPaint(layer.id, "line-gradient", undefined);
+				setPaint(layer.id, "line-translate", [0, 0]);
+			}
+			if (hidden) setLayout(layer.id, "visibility", "none");
+		}
+	}
+
 
 	function restore(keep = new Set()) {
 		for (const [id, original] of originals) {
@@ -305,7 +388,7 @@
 		for (const [id, saved] of squadratsOrder) {
 			if (map.getLayer(id) !== saved.layer) squadratsOrder.delete(id);
 		}
-		if (config.squadratsBelowRoads === false) {
+		if (config.visualsEnabled === false || config.squadratsBelowRoads === false) {
 			for (const [id, saved] of [...squadratsOrder].reverse()) {
 				const next = saved.following.find((candidate) => map.getLayer(candidate));
 				map.moveLayer(id, next);
@@ -332,14 +415,14 @@
 			);
 		});
 		if (anchorIndex < 0) return;
-		const anchor = layers[anchorIndex].id;
-		const expected = overlays.map((layer) => layer.id);
-		const before = layers
-			.slice(Math.max(0, anchorIndex - overlays.length), anchorIndex)
-			.map((layer) => layer.id);
-		if (same(before, expected)) return;
-		// Keep Squadrats' internal fill/outline order and avoid redundant style events.
-		for (const layer of overlays) {
+		// Never raise an overlay that Squadrats already placed below the roads.
+		// Gathering every layer here used to lift low masks above intervening
+		// land/water fills and expose a second grid.
+		const anchor = layers[anchorIndex];
+		const moving = overlays.filter((layer) => layers.indexOf(layer) > anchorIndex);
+		if (!moving.length) return;
+		// Keep the native relative order, moving higher layers down only.
+		for (const layer of moving) {
 			if (!squadratsOrder.has(layer.id))
 				squadratsOrder.set(layer.id, {
 					layer: map.getLayer(layer.id),
@@ -347,12 +430,20 @@
 						.slice(layers.findIndex((item) => item.id === layer.id) + 1)
 						.map((item) => item.id),
 				});
-			map.moveLayer(layer.id, anchor);
+			map.moveLayer(layer.id, anchor.id);
 		}
 	}
 
 	function applySquadrats() {
 		orderSquadrats();
+		if (config.visualsEnabled === false) {
+			for (const [id, original] of squadratsOriginals) {
+				if (map.getLayer(id) === original.layer && same(getPaint(id, original.property), original.applied))
+					setPaint(id, original.property, original.value);
+			}
+			squadratsOriginals.clear();
+			return;
+		}
 		const percent = Number.isFinite(config.squadratsOpacity)
 			? Math.max(0, Math.min(100, config.squadratsOpacity))
 			: 50;
@@ -380,6 +471,7 @@
 			if (!original || original.layer !== live) {
 				original = {
 					layer: live,
+					property,
 					value: structuredClone(current),
 					applied: structuredClone(current),
 				};
@@ -659,11 +751,18 @@
 			"text-halo-width": 1,
 		};
 		const iconsReady = installHazardIcons();
+		const excludedRatings = ["__no_grade__"];
+		for (let grade = Number(config.maximumTrailLevel.slice(1)) + 1; grade <= 5; grade++)
+			excludedRatings.push(`S${grade}`, `S${grade}+`, `S${grade}-`);
 		const layers = [
 			{
 				id: hazardIds[0],
 				type: "line",
-				filter: ["==", ["geometry-type"], "LineString"],
+				filter: [
+					"all",
+					["==", ["geometry-type"], "LineString"],
+					["match", ["get", "trailRating"], excludedRatings, false, true],
+				],
 				paint: { "line-color": hazardDotColour(), "line-width": 2, "line-dasharray": [1, 5] },
 			},
 			{
@@ -731,7 +830,10 @@
 				!map.getLayer(layer.id)
 			)
 				map.addLayer({ ...layer, source: "krb-conditions", minzoom: 14 });
-		if (map.getLayer(hazardIds[0])) setPaint(hazardIds[0], "line-color", hazardDotColour());
+		if (map.getLayer(hazardIds[0])) {
+			setPaint(hazardIds[0], "line-color", hazardDotColour());
+			setFilter(hazardIds[0], layers[0].filter);
+		}
 		if (map.getLayer(hazardIds[2])) {
 			setLayout(hazardIds[2], "text-font", font);
 			for (const [property, value] of Object.entries(widthPaint)) {
@@ -816,7 +918,9 @@
 		if (!map || !config || applying) return;
 		applying = true;
 		try {
+			if (config.visualsEnabled === false) inspectionMode = false;
 			applySquadrats();
+			applyInspection();
 			applyRoadNumbers();
 			const preload =
 				config.preloadRouteHazards === true &&
@@ -839,14 +943,15 @@
 				}
 			}
 			drawHazards();
-			if (config.visualsEnabled === false) {
+			if (config.visualsEnabled === false || inspectionMode) {
 				restore();
-				postStatus({ ready: true, enabled: false });
+				postStatus({ ready: true, enabled: config.visualsEnabled !== false, inspection: inspectionMode });
 				return;
 			}
 
 			const styleLayers = (map.getStyle()?.layers || []).filter(
-				(layer) => !layer.id.startsWith("krb-conditions"),
+				(layer) => !layer.id.startsWith("krb-") && !layer.id.startsWith("squadrats-") &&
+					!/^komoot_(?:tour|original_track|marked_tour|recorded_tour|recording_tour|back_to_tour|route_removed)/.test(layer.source || ""),
 			);
 			function difficultyMetadata(layer) {
 				const original = originals.get(layer.id);
@@ -931,19 +1036,18 @@
 						original.paint[property] = structuredClone(getPaint(layer.id, property));
 					}
 				}
-				const allowed = ["any", ["==", level, -1], ["<=", level, max]];
-				setFilter(layer.id, original.filter ? ["all", original.filter, allowed] : allowed);
+				setFilter(layer.id, original.filter);
 				const colour = transformStops(
 					original.paint[colourProperty],
 					function (base) {
 						const expression = ["match", level];
 						for (let index = 0; index <= 5; index++) {
-							const mode = config.rules[`S${index}`];
+							const mode = index > max ? "native" : config.rules[`S${index}`];
 							const custom = config.colours?.[`S${index}`];
 							const colour = /^#[0-9a-f]{6}$/i.test(custom) ? custom : colours[index];
 							const selected = mode === "avoid" ? "#7a1016" : colour;
 							const trailColour =
-								mode === "off"
+								(mode === "off" || mode === "native")
 									? base
 									: layer.type === "symbol"
 										? labelColour(selected)
@@ -952,7 +1056,7 @@
 											: toneTrailColour(selected, satellite);
 							expression.push(
 								index,
-								layer.type === "symbol" && neutralLabels
+								index > max ? base : layer.type === "symbol" && neutralLabels
 									? satellite
 										? "#ffffff"
 										: "#000000"
@@ -969,7 +1073,7 @@
 					function (base) {
 						const expression = ["match", level];
 						for (let index = 0; index <= 5; index++)
-							expression.push(index, config.rules[`S${index}`] === "off" ? 0.2 : 1);
+							expression.push(index, index <= max && config.rules[`S${index}`] === "off" ? 0.2 : 1);
 						expression.push(1);
 						return ["*", base, expression];
 					},
@@ -997,7 +1101,7 @@
 									for (let index = 0; index <= 5; index++)
 										expression.push(
 											index,
-											!neutralLabels && config.rules[`S${index}`] === "off" ? base : value,
+											index > max || (!neutralLabels && config.rules[`S${index}`] === "off") ? base : value,
 										);
 									expression.push(base);
 									return expression;
@@ -1017,7 +1121,7 @@
 						function (base) {
 							const expression = ["match", level];
 							for (let index = 0; index <= 5; index++)
-								expression.push(index, preserveTrackWidth(base, ["max", base, effectiveWidth]));
+								expression.push(index, index > max ? base : preserveTrackWidth(base, ["max", base, effectiveWidth]));
 							expression.push(base);
 							return expression;
 						},
@@ -1025,13 +1129,13 @@
 					);
 					setPaint(layer.id, "line-width", preserveWidth ? original.paint["line-width"] : width);
 					if (!preserveWidth) {
-						if (setPaint(layer.id, "line-gap-color", satellite ? "rgba(0,0,0,0)" : "#000000")) {
+						if (setPaint(layer.id, "line-gap-color", transformStops(original.paint["line-gap-color"], (base) => ["case", ["<=", level, max], satellite ? "rgba(0,0,0,0)" : "#000000", base], "rgba(0,0,0,0)"))) {
 							setPaint(
 								layer.id,
 								"line-gap-width",
 								transformStops(
 									original.paint["line-gap-width"],
-									(base) => preserveTrackWidth(base, satellite ? 0 : 1),
+									(base) => ["case", ["<=", level, max], preserveTrackWidth(base, satellite ? 0 : 1), base],
 									0,
 								),
 							);
@@ -1057,7 +1161,7 @@
 	}
 
 	function postStatus(detail) {
-		window.postMessage({ type: "KRB_MAP_STATUS", detail }, location.origin);
+		window.postMessage({ type: "KRB_MAP_STATUS", detail: { ...detail, squadratsAvailable: (map?.getStyle()?.layers || []).some((layer) => layer.id.startsWith("squadrats-")) } }, location.origin);
 	}
 
 	window.addEventListener("message", function (event) {
@@ -1272,6 +1376,15 @@
 	}
 	function checkRouteChanged(reason) {
 		if (poiOperation) return;
+		if (config?.visualsEnabled !== false) {
+			try {
+				const snapshot = routeSnapshot();
+				globalThis.KrbKomootPoiInsert?.clearStale?.(rideCoordinates(snapshot.route, true));
+			}
+			catch (error) {
+				console.debug("Generated POI refresh unavailable:", error.message);
+			}
+		}
 		if (!checkedRouteKey) return;
 		let current;
 		try {
@@ -1334,13 +1447,14 @@
 	window.addEventListener("message", function (event) {
 		if (event.source !== window || event.origin !== location.origin) return;
 		if (event.data?.type === "KRB_POI_CANCEL" && poiOperation?.id === event.data.requestId) poiOperation.cancelled = true;
-		if (event.data?.type === "KRB_POI_ADD") void addApprovedPois(event.data);
+		if (event.data?.type === "KRB_POI_ADD" && config?.visualsEnabled !== false) void addApprovedPois(event.data);
 		if (event.data?.type === "KRB_ROUTE_SNAPSHOT") {
 			try {
 				const snapshot = routeSnapshot();
 				if (event.data.includeProfile === true) {
 					const active = rideCoordinates(snapshot.route, true);
 					if (!active) throw new Error("Komoot route metadata is not ready. Try again when the route has loaded.");
+					if (!poiOperation && config?.visualsEnabled !== false) globalThis.KrbKomootPoiInsert?.clearStale?.(active);
 					snapshot.nativeProfile = {
 						coordinates: rideCoordinates(snapshot.route),
 						surfaces: active.link("surfaces")?.get?.("items"),
@@ -1368,7 +1482,7 @@
 				);
 			}
 		}
-		if (event.data?.type === "KRB_ROUTE_FOCUS" && map) {
+		if (event.data?.type === "KRB_ROUTE_FOCUS" && map && config?.visualsEnabled !== false) {
 			checkRouteChanged();
 			if (!checkedRouteKey || event.data.routeKey !== checkedRouteKey) return;
 			if (event.data.clearPreview === true) {
@@ -1498,15 +1612,29 @@
 		if (
 			event.source !== window ||
 			event.origin !== location.origin ||
-			event.data?.type !== "KRB_MAP_CONFIG"
+			!["KRB_MAP_CONFIG", "KRB_INSPECTION_MODE"].includes(event.data?.type)
 		)
 			return;
+		if (event.data.type === "KRB_INSPECTION_MODE") {
+			inspectionMode = config?.visualsEnabled !== false && event.data.active === true;
+			scheduleApply();
+			return;
+		}
 		const incoming = event.data.config;
 		if (!incoming || !/^S[0-5]$/.test(incoming.maximumTrailLevel) || !incoming.rules) return;
 		config = incoming;
+		if (config.visualsEnabled === false) {
+			clearSquadratsWait();
+			clearTimeout(scheduled);
+			scheduled = undefined;
+			clearTimeout(hazardTimer);
+			clearRouteHighlight();
+			clearRoutePreview();
+		}
 		if (latestHazardStatus) window.postMessage(latestHazardStatus, location.origin);
 		searchAttempts = 0;
-		scheduleApply();
+		if (config.visualsEnabled === false) apply();
+		else scheduleApply();
 	});
 
 	setInterval(function () {
@@ -1538,6 +1666,7 @@
 			originals.clear();
 			squadratsOriginals.clear();
 			roadNumberOriginals.clear();
+			inspectionOriginals.clear();
 			squadratsOrder.clear();
 			searchAttempts = 0;
 		}

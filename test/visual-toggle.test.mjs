@@ -251,6 +251,8 @@ function evaluate(expression, properties) {
 	const [operator, ...args] = expression;
 	const ev = (value) => evaluate(value, properties);
 	switch (operator) {
+		case "geometry-type":
+			return properties.geometryType || "LineString";
 		case "format":
 			return args.filter((value, index) => index % 2 === 0).map(ev).join("");
 		case "concat":
@@ -263,6 +265,8 @@ function evaluate(expression, properties) {
 			return properties[args[0]];
 		case "has":
 			return args[0] in properties;
+		case "to-number":
+			return args.map(ev).map(Number).find(Number.isFinite);
 		case "to-string":
 			return String(ev(args[0]));
 		case "case": {
@@ -320,7 +324,7 @@ test("maximum difficulty preserves native access restrictions and unknown values
 	f.configure({ maximumTrailLevel: "S1" });
 	const filter = f.layers[0].filter;
 	assert.equal(evaluate(filter, { mtb_scale: "1-" }), true);
-	assert.equal(evaluate(filter, { mtb_scale: "2" }), false);
+	assert.equal(evaluate(filter, { mtb_scale: "2" }), true);
 	assert.equal(evaluate(filter, { mtb_scale: "0", bicycle: "no" }), false);
 	assert.equal(evaluate(filter, { mtb_scale: "unknown" }), true);
 });
@@ -541,7 +545,7 @@ test("labels contrast with their halo while line colours remain unchanged; Off r
 	assert.deepEqual(f.layers[2].paint, originalPaint);
 });
 
-test("Squadrats opacity scales fills and lines, preserves zoom stops and restores defaults", function () {
+test("Squadrats opacity scales collected tile masks, lines and route highlights", function () {
 	const f = fixture();
 	const fill = {
 		id: "squadrats-squadrats",
@@ -563,16 +567,8 @@ test("Squadrats opacity scales fills and lines, preserves zoom stops and restore
 	};
 	f.layers.push(fill, line, unrelated);
 	const original = copy(fill.paint);
-	f.configure({ squadratsOpacity: 25, visualsEnabled: false });
-	assert.deepEqual(fill.paint["fill-opacity"], [
-		"interpolate",
-		["linear"],
-		["zoom"],
-		3,
-		["*", 0.8, 0.25],
-		14,
-		["*", 0.1, 0.25],
-	]);
+	f.configure({ squadratsOpacity: 25 });
+	assert.deepEqual(fill.paint["fill-opacity"], ["interpolate", ["linear"], ["zoom"], 3, ["*", 0.8, 0.25], 14, ["*", 0.1, 0.25]]);
 	assert.deepEqual(line.paint["line-opacity"], ["*", 1, 0.25]);
 	assert.equal(unrelated.paint["fill-opacity"], 0.7);
 	const writes = f.writes();
@@ -1232,7 +1228,7 @@ test("Squadrats sits above imagery and below roads without repeated layer moves"
 	);
 	f.restyle();
 	assert.equal(moves, 2);
-	f.configure({ squadratsBelowRoads: false });
+	f.configure({ squadratsBelowRoads: true, visualsEnabled: false });
 	assert.deepEqual(
 		f.layers.map((layer) => layer.id),
 		["satellite", "road-casing", "road-path", "squadrats-fill", "squadrats-outline"],
@@ -1258,7 +1254,7 @@ test("Squadrats sits above imagery and below roads without repeated layer moves"
 	assert.equal(moves, previous, "do not bury overlays when roads are baked into raster tiles");
 });
 
-test("new Squadrats use double opacity scaling capped at the original opacity", function () {
+test("new Squadrats highlights fade without exposing overlapping collected masks", function () {
 	const f = fixture();
 	const collected = {
 		id: "squadrats-collected",
@@ -1408,7 +1404,10 @@ test("road numbers are opt-in, preserve names and avoid affecting cycling route 
 	assert.deepEqual(f.layers[3], original);
 	f.configure({ emphasizeRoadNumbers: true });
 	const road = f.layers[3];
-	assert.equal(evaluate(road.layout["text-field"], { name: "Kangasalantie", ref: "339" }), "339 · Kangasalantie");
+	assert.equal(evaluate(road.layout["text-field"], { name: "Kangasalantie", ref: "339" }), "Kangasalantie");
+	const shield = f.layers.find((layer) => layer.id === "krb-road-number-label-road-primary");
+	assert.equal(evaluate(shield.layout["text-field"], { ref: "339" }), "339");
+	assert.equal(evaluate(shield.layout["text-field"], {}), "");
 	assert.equal(evaluate(road.layout["text-field"], { name: "Unnamed number" }), "Unnamed number");
 	assert.deepEqual(road.filter, original.filter);
 	assert.equal(road.minzoom, original.minzoom);
@@ -1419,14 +1418,16 @@ test("road numbers are opt-in, preserve names and avoid affecting cycling route 
 	assert.equal(f.writes(), writes);
 	f.configure({ emphasizeRoadNumbers: false });
 	assert.deepEqual(f.layers[3], original);
+	assert.ok(!f.layers.some((layer) => layer.id.startsWith("krb-road-number-")));
 });
-test("motorway references are emphasized once and independently of trail colours", function () {
+test("motorway references are emphasized once and restored by the master toggle", function () {
 	const f = fixture(), original = numberedRoad("{ref}");
 	original.id = "label-road-motorway";
 	f.layers.push(copy(original));
+	f.configure({ emphasizeRoadNumbers: true, visualsEnabled: true });
+	assert.equal(f.layers[3].layout["text-field"], "");
+	assert.equal(evaluate(f.layers.find((layer) => layer.id === "krb-road-number-label-road-motorway").layout["text-field"], { ref: "9" }), "9");
 	f.configure({ emphasizeRoadNumbers: true, visualsEnabled: false });
-	assert.equal(evaluate(f.layers[3].layout["text-field"], { ref: "9" }), "9");
-	f.configure({ emphasizeRoadNumbers: false, visualsEnabled: false });
 	assert.deepEqual(f.layers[3], original);
 });
 test("road label zoom expressions remain top-level and replacement styles restore their own labels", function () {
@@ -1441,7 +1442,281 @@ test("road label zoom expressions remain top-level and replacement styles restor
 	replacement.paint["text-color"] = "#ffffff";
 	f.layers[3] = copy(replacement);
 	f.restyle();
-	assert.equal(evaluate(f.layers[3].layout["text-field"], { name: "Road", ref: "3400" }), "3400 · Road");
+	assert.equal(f.layers[3].layout["text-field"], "{name}");
+	assert.equal(f.layers.filter((layer) => layer.id === "krb-road-number-label-road-primary").length, 1);
 	f.configure({ emphasizeRoadNumbers: false });
 	assert.deepEqual(f.layers[3], replacement);
+});
+
+
+test("road shields prefer reference categories over physical highway class", function () {
+	const f = fixture(), original = numberedRoad();
+	f.layers.push(original);
+	f.configure({ emphasizeRoadNumbers: true });
+	const shield = f.layers.find((layer) => layer.id === "krb-road-number-label-road-primary");
+	for (const [properties, colour, scale] of [
+		[{ ref: "12", highway: "primary" }, "main", 1.05],
+		[{ ref: "3001", highway: "tertiary" }, "local", 0.75],
+		[{ ref: "2505", class: "minor" }, "local", 0.75],
+		[{ ref: "A12", class: "unrecognized" }, "unknown", 0.9],
+		[{ ref: "2505", highway: "primary" }, "local", 0.75],
+		[{ ref: "3001", highway: "primary" }, "local", 0.75],
+		[{ ref: "65", highway: "primary" }, "national", 1],
+		[{ ref: "339", highway: "primary" }, "regional", 0.9],
+		[{ ref: "10000", highway: "primary" }, "unknown", 0.9],
+		[{ ref: "A12" }, "main", 1.05],
+	]) {
+		assert.equal(evaluate(shield.layout["icon-image"], properties), `krb-road-shield-${colour}`);
+		assert.equal(evaluate(shield.layout["text-size"], properties), 11 * scale);
+	}
+	assert.equal(shield.layout["icon-text-fit"], "both");
+	assert.equal(evaluate(shield.paint["text-color"], { ref: "2505" }), "#ffffff");
+	assert.equal(evaluate(shield.paint["text-color"], { ref: "65" }), "#232d32");
+	assert.equal(evaluate(shield.paint["text-color"], { ref: "339" }), "#232d32");
+	assert.equal(evaluate(shield.layout["icon-image"], {}), "");
+	assert.equal(shield.minzoom, original.minzoom);
+	assert.deepEqual(shield.filter, original.filter);
+});
+
+test("road shield sizes preserve top-level native zoom steps", function () {
+	const f = fixture(), original = numberedRoad();
+	original.layout["text-size"] = ["step", ["zoom"], 10, 15, 12];
+	f.layers.push(original);
+	f.configure({ emphasizeRoadNumbers: true });
+	const size = f.layers.find((layer) => layer.id === "krb-road-number-label-road-primary").layout["text-size"];
+	assert.equal(size[0], "step");
+	assert.deepEqual(size[1], ["zoom"]);
+	assert.equal(size[3], 15);
+	assert.equal(evaluate(size[2], { highway: "primary" }), 10.5);
+	assert.equal(evaluate(size[4], { highway: "tertiary" }), 12 * 0.75);
+});
+
+
+test("satellite inspection restores route widths and overlay visibility exactly", function () {
+	const f = fixture(), route = { id: "komoot-tour-routed", type: "line", source: "komoot_tour", layout: {},
+		paint: { "line-width": { stops: [[14, 4], [16, 6]] }, "line-gap-width": 2, "line-blur": 0.5 } },
+		heatmap = { id: "global-heatmap", source: "heatmap-global", type: "raster", layout: { visibility: "visible" }, paint: {} },
+		squares = { id: "squadrats-yard", source: "other", type: "fill", layout: { visibility: "none" }, paint: {} };
+	f.layers.push(copy(route), copy(heatmap), copy(squares));
+	f.configure({ visualsEnabled: true });
+	f.reply({ type: "KRB_INSPECTION_MODE", active: true });
+	assert.equal(f.layers[3].paint["line-width"], 1);
+	assert.equal(f.layers[3].paint["line-gap-width"], 0);
+	assert.equal(f.layers[4].layout.visibility, "none");
+	assert.equal(f.layers[5].layout.visibility, "none");
+	const writes = f.writes();
+	f.restyle();
+	assert.equal(f.writes(), writes);
+	f.reply({ type: "KRB_INSPECTION_MODE", active: false });
+	assert.deepEqual(f.layers[3], route);
+	assert.deepEqual(f.layers[4], heatmap);
+	assert.deepEqual(f.layers[5], squares);
+});
+
+test("inspection follows replacement layers and newly arriving Squadrats without restoring stale widths", function () {
+	const f = fixture();
+	f.layers.push({ id: "komoot-tour-routed", type: "line", source: "komoot_tour", paint: { "line-width": 6 }, layout: {} });
+	f.configure({ visualsEnabled: true });
+	f.reply({ type: "KRB_INSPECTION_MODE", active: true });
+	f.layers[3] = { id: "komoot-tour-routed", type: "line", source: "komoot_tour", paint: { "line-width": 9 }, layout: {} };
+	f.layers.push({ id: "squadrats-new", source: "other", type: "line", paint: {}, layout: { visibility: "visible" } });
+	f.restyle();
+	assert.equal(f.layers[3].paint["line-width"], 1);
+	assert.equal(f.layers[4].layout.visibility, "none");
+	f.reply({ type: "KRB_INSPECTION_MODE", active: false });
+	assert.equal(f.layers[3].paint["line-width"], 9);
+	assert.equal(f.layers[4].layout.visibility, "visible");
+});
+
+
+test("master Off restores Squadrats paint/order, road shields and inspection and stays inert", function () {
+	const f = fixture();
+	const road = numberedRoad("{ref}"),
+		route = { id: "route", source: "komoot_tour", type: "line", paint: { "line-width": 7 }, layout: {} },
+		squares = { id: "squadrats-squadrats", source: "squadrats-source", type: "fill", paint: { "fill-opacity": 0.8 }, layout: {} };
+	f.layers.push(copy(road), copy(route), copy(squares));
+	f.configure({ emphasizeRoadNumbers: true, squadratsOpacity: 25 });
+	f.reply({ type: "KRB_INSPECTION_MODE", active: true });
+	assert.equal(f.layers.find((layer) => layer.id === "route").paint["line-width"], 1);
+	f.configure({ visualsEnabled: false, emphasizeRoadNumbers: true, squadratsOpacity: 25 });
+	assert.deepEqual(f.layers.find((layer) => layer.id === road.id), road);
+	assert.deepEqual(f.layers.find((layer) => layer.id === route.id), route);
+	assert.deepEqual(f.layers.find((layer) => layer.id === squares.id), squares);
+	assert.equal(f.layers.some((layer) => layer.id.startsWith("krb-road-number-")), false);
+	const writes = f.writes();
+	f.restyle();
+	f.reply({ type: "KRB_INSPECTION_MODE", active: true });
+	assert.equal(f.writes(), writes);
+});
+
+test("Off preserves changes made by Squadrats itself since our last opacity write", function () {
+	const f = fixture(), layer = { id: "squadrats-grid", source: "squadrats-grid", type: "line", paint: { "line-opacity": 0.8 } };
+	f.layers.push(layer);
+	f.configure({ squadratsOpacity: 25 });
+	layer.paint["line-opacity"] = 0.3;
+	f.configure({ visualsEnabled: false });
+	assert.equal(layer.paint["line-opacity"], 0.3);
+});
+
+
+test("collected Squadrats tile masks fade once and restore native paints", function () {
+	const f = fixture();
+	const masks = ["squadrats", "yard", "squadratinhos", "yardinho", "ubersquadratinho"].map(function (name) {
+		return { id: `squadrats-${name}`, source: "squadrats-source", "source-layer": name, type: "fill",
+			paint: { "fill-color": "#ffe8cf", "fill-opacity": ["interpolate", ["linear"], ["zoom"], 9, 0, 13, 1] } };
+	});
+	f.layers.push(...masks);
+	const before = copy(masks);
+	f.configure({ squadratsOpacity: 25 });
+	for (let pass = 0; pass < 4; pass++) f.restyle();
+	assert.deepEqual(masks[0].paint["fill-opacity"], ["interpolate", ["linear"], ["zoom"], 9, ["*", 0, 0.25], 13, ["*", 1, 0.25]]);
+	f.configure({ visualsEnabled: false });
+	assert.deepEqual(masks, before);
+	assert.equal(f.layers.filter((layer) => layer.source === "squadrats-source").length, 5);
+});
+
+
+test("below-roads ordering never raises native Squadrats masks above land or water", function () {
+	const f = fixture();
+	const native = [
+		{ id: "background", type: "background", paint: {} },
+		{ id: "squadrats-low-mask", type: "fill", paint: {} },
+		{ id: "land", type: "fill", paint: {} },
+		{ id: "squadrats-low-outline", type: "line", paint: {} },
+		{ id: "water", type: "fill", paint: {} },
+		{ id: "road-casing", type: "line", paint: {} },
+		{ id: "road-surface", type: "line", paint: {} },
+		{ id: "squadrats-high-highlight", type: "fill", paint: {} },
+	];
+	f.layers.splice(0, f.layers.length, ...copy(native));
+	const moves = [];
+	f.map.moveLayer = function (id, before) {
+		moves.push(id);
+		const [layer] = f.layers.splice(f.layers.findIndex((item) => item.id === id), 1);
+		f.layers.splice(before === undefined ? f.layers.length : f.layers.findIndex((item) => item.id === before), 0, layer);
+	};
+	f.configure({ squadratsBelowRoads: true });
+	assert.deepEqual(moves, ["squadrats-high-highlight"]);
+	assert.deepEqual(f.layers.slice(0, 5), native.slice(0, 5));
+	assert.deepEqual(f.layers.map((layer) => layer.id), ["background", "squadrats-low-mask", "land", "squadrats-low-outline", "water", "squadrats-high-highlight", "road-casing", "road-surface"]);
+	f.restyle();
+	assert.equal(moves.length, 1);
+	f.configure({ squadratsBelowRoads: false });
+	assert.deepEqual(f.layers, native);
+});
+
+test("Squadrats already below the roads is left in its native position", function () {
+	const f = fixture();
+	const native = [
+		{ id: "background", type: "background", paint: {} },
+		{ id: "squadrats-mask", type: "fill", paint: {} },
+		{ id: "land", type: "fill", paint: {} },
+		{ id: "road-surface", type: "line", paint: {} },
+	];
+	f.layers.splice(0, f.layers.length, ...copy(native));
+	f.map.moveLayer = function () { assert.fail("An overlay already below roads must not move"); };
+	f.configure({ squadratsBelowRoads: true });
+	f.restyle();
+	assert.deepEqual(f.layers, native);
+});
+
+
+test("grades above the highlight limit retain native MTB lines and labels", function () {
+	const f = fixture();
+	f.layers[2].paint = { "text-color": "#444444", "text-opacity": 0.9, "text-halo-color": "#dddddd", "text-halo-width": 2 };
+	f.configure({ maximumTrailLevel: "S1", colourLabels: true });
+	for (const grade of ["2", "3", "4", "5"]) {
+		assert.equal(evaluate(f.layers[0].filter, { mtb_scale: grade }), true);
+		assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: grade }), "#123456");
+		assert.equal(evaluate(f.layers[0].paint["line-opacity"][4], { mtb_scale: grade }), 0.7);
+		assert.equal(evaluate(f.layers[2].paint["text-color"], { mtb_scale: grade }), "#444444");
+		assert.equal(evaluate(f.layers[2].paint["text-opacity"], { mtb_scale: grade }), 0.9);
+		assert.equal(evaluate(f.layers[2].paint["text-halo-width"], { mtb_scale: grade }), 2);
+	}
+});
+
+test("hazard crumbs follow the highlight limit and refresh without refetching", function () {
+	const f = fixture();
+	f.configure({ showHazards: true, maximumTrailLevel: "S1" });
+	const request = f.messages.findLast((message) => message.type === "KRB_HAZARD_VIEW");
+	f.reply({ type: "KRB_HAZARD_DATA", requestId: request.requestId, data: { type: "FeatureCollection", features: [] } });
+	const dots = f.layers.find((layer) => layer.id === "krb-conditions-line");
+	assert.ok(dots);
+	assert.equal(evaluate(dots.filter, { trailRating: "S1" }), true);
+	assert.equal(evaluate(dots.filter, { trailRating: "S2+" }), false);
+	assert.equal(evaluate(dots.filter, { trailRating: "" }), true);
+	f.configure({ showHazards: true, maximumTrailLevel: "S3" });
+	assert.equal(evaluate(dots.filter, { trailRating: "S2+" }), true);
+	assert.equal(evaluate(dots.filter, { trailRating: "S4" }), false);
+});
+
+
+test("fallback paths above the highlight limit keep native width and casing", function () {
+	const f = fixture();
+	f.layers.splice(0, f.layers.length, { id: "path", type: "line", paint: { "line-color": "#333333", "line-width": 1, "line-gap-width": 0, "line-gap-color": "#666666" } });
+	f.configure({ maximumTrailLevel: "S1" });
+	const paint = f.layers[0].paint;
+	assert.equal(evaluate(paint["line-width"], { mtb_scale: "2" }), 1);
+	assert.equal(evaluate(paint["line-gap-width"], { mtb_scale: "2" }), 0);
+	assert.equal(evaluate(paint["line-gap-color"], { mtb_scale: "2" }), "#666666");
+	assert.equal(evaluate(paint["line-color"], { mtb_scale: "2" }), "#333333");
+	assert.equal(evaluate(paint["line-width"], { mtb_scale: "1" }), 3);
+});
+
+
+test("inspection uses native default blue and suppresses surface dashes and route borders", function () {
+	const f = fixture();
+	const route = { id: "komoot-tour-routed", source: "komoot_tour", type: "line", layout: { visibility: "visible" }, paint: {
+		"line-color": ["case", ["has", "selected"], ["rgba", 0, 40, 90, 1], ["rgba", 0, 88, 202, 1]],
+		"line-width": 6, "line-dasharray": [2, 3], "line-offset": 2, "line-opacity": 0.5 } };
+	const overlays = [route,
+		{ id: "komoot-tour-routed-border", source: "komoot_tour", type: "line", paint: { "line-color": "white", "line-width": 8 }, layout: {} },
+		{ id: "komoot-tour-highlight-segment", source: "komoot_tour", type: "line", paint: { "line-color": "brown", "line-width": 6 }, layout: {} },
+		{ id: "komoot-tour-routed-surface-unpaved", source: "komoot_tour_surface", type: "line", paint: { "line-dasharray": [1, 2] }, layout: { visibility: "visible" } },
+		{ id: "komoot-tour-direction", source: "komoot_tour", type: "symbol", paint: {}, layout: { visibility: "visible" } },
+		{ id: "komoot-original-track", source: "komoot_original_track", type: "line", paint: { "line-width": 8, "line-color": "brown" }, layout: { visibility: "visible" } },
+	];
+	f.layers.push(...copy(overlays));
+	f.configure();
+	f.reply({ type: "KRB_INSPECTION_MODE", active: true });
+	for (const id of ["komoot-tour-routed", "komoot-tour-highlight-segment"]) {
+		const layer = f.layers.find((item) => item.id === id);
+		assert.equal(layer.paint["line-width"], 1);
+		assert.deepEqual(layer.paint["line-color"], ["rgba", 0, 88, 202, 1]);
+		assert.equal(layer.paint["line-dasharray"], undefined);
+		assert.equal(layer.paint["line-opacity"], 1);
+		assert.equal(layer.paint["line-offset"], 0);
+	}
+	for (const id of ["komoot-tour-routed-border", "komoot-tour-routed-surface-unpaved", "komoot-tour-direction", "komoot-original-track"])
+		assert.equal(f.layers.find((item) => item.id === id).layout.visibility, "none");
+	f.restyle();
+	assert.deepEqual(f.layers.find((item) => item.id === route.id).paint["line-color"], ["rgba", 0, 88, 202, 1]);
+	f.reply({ type: "KRB_INSPECTION_MODE", active: false });
+	assert.deepEqual(f.layers.slice(3), overlays);
+});
+
+
+test("trail colouring never restyles Komoot original-track reference geometry", function () {
+	const f = fixture();
+	f.layers.splice(0);
+	const original = { id: "komoot-original-track", source: "komoot_original_track", type: "line", paint: { "line-width": 8, "line-color": "brown" }, layout: {} };
+	f.layers.push(copy(original));
+	f.configure();
+	assert.deepEqual(f.layers[0], original);
+});
+
+
+test("satellite inspection suspends trail highlighting across restyles and restores current rules", function () {
+	const f = fixture();
+	const native = copy(f.layers);
+	f.configure();
+	assert.notDeepEqual(f.layers, native);
+	f.reply({ type: "KRB_INSPECTION_MODE", active: true });
+	assert.deepEqual(f.layers, native);
+	f.restyle();
+	assert.deepEqual(f.layers, native);
+	f.configure({ rules: { S0: "avoid", S1: "highlight", S2: "off", S3: "off", S4: "off", S5: "off" } });
+	assert.deepEqual(f.layers, native);
+	f.reply({ type: "KRB_INSPECTION_MODE", active: false });
+	assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" }), "#7a1016");
 });

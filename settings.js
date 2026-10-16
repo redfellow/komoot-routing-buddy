@@ -14,7 +14,7 @@
 	const DEFAULT_OPTIONS = {
 		visualsEnabled: true,
 		colourLabels: false,
-		emphasizeRoadNumbers: false,
+		emphasizeRoadNumbers: true,
 		showHazards: true,
 		narrowWarningWidth: 0.4,
 		preloadRouteHazards: false,

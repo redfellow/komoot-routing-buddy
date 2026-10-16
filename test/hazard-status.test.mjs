@@ -31,6 +31,7 @@ test("OSM status survives early delivery, shows a notched loading arc and restor
 	indicator.querySelector = (selector) => (selector.endsWith("osm-icon") ? icon : count);
 	const messages = [];
 	const context = {
+		extensionEnabled: true,
 		window: {
 			postMessage(message) {
 				messages.push(message);
@@ -80,6 +81,11 @@ test("OSM status survives early delivery, shows a notched loading arc and restor
 	context.renderHazardStatus({ state: "idle", text: "" });
 	assert.equal(indicator.hidden, true);
 	assert.equal(footer.hidden, true);
+	context.extensionEnabled = false;
+	context.renderHazardStatus({ state: "loading", text: "Late OSM reply" });
+	assert.equal(indicator.hidden, true);
+	assert.equal(indicator.dataset.state, "idle");
+
 });
 
 test("floater readiness disables interaction until map styling reports ready", function () {
@@ -97,6 +103,7 @@ test("floater readiness disables interaction until map styling reports ready", f
 	const start = source.indexOf("let mapReady = false;");
 	const code = source.slice(start, source.indexOf("let layersRestoredThisLoad", start));
 	const context = {
+		extensionEnabled: true,
 		document: {
 			querySelector() {
 				return panel;
@@ -112,4 +119,5 @@ test("floater readiness disables interaction until map styling reports ready", f
 	assert.equal(panel.attributes["aria-busy"], "false");
 	runInNewContext("mapReady = false; updatePanelReadiness();", context);
 	assert.equal(panel.inert, true);
+
 });
