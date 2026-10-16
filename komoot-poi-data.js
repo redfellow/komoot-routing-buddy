@@ -6,9 +6,9 @@
 			this.name = "KomootPoiError";
 		}
 	}
-	const categories = Object.freeze({ trails: "Segment start", gravel: "Segment start", technical: "Segment start", hills: "Steep incline", steep: "Steep incline", halfway: "Checkpoint" });
+	const categories = Object.freeze({ trails: "Danger", gravel: "Checkpoint", technical: "Danger", hills: "Checkpoint", steep: "Steep incline", halfway: "Checkpoint" });
 	// Verified against the native customization form and its resulting reference model.
-	const categoryIds = Object.freeze({ trails: 24, gravel: 24, technical: 24, hills: 43, steep: 43, halfway: 35 });
+	const categoryIds = Object.freeze({ trails: 5, gravel: 35, technical: 5, hills: 35, steep: 43, halfway: 35 });
 	function location(value) {
 		if (!value || !Number.isFinite(value.lat) || Math.abs(value.lat) > 90 ||
 			!Number.isFinite(value.lng) || Math.abs(value.lng) > 180)

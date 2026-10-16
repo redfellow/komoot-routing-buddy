@@ -230,6 +230,7 @@ test("native singletrack grades distinguish S0 Trails from S1–S5 Technical", f
 		assert.equal(points[0].mtbSource, "Komoot");
 		assert.equal(result.totals[grade ? "technical" : "trail"], 1000);
 		assert.equal(result.missingMtbDistance, 0);
+		if (grade) assert.match(api.sectionDetail(result.sections.find((section) => section.kind === "technical")), new RegExp(`S${grade} riding`));
 		assert.ok(result.pois.some((poi) => poi.name === (grade ? "Technical" : "Trails")));
 	}
 });
@@ -257,10 +258,11 @@ test("missing native grades reuse conservative checker matching without replacin
 });
 
 test("Gravel has a higher adjustable minimum than Trails and Technical", function () {
-	assert.ok(!api.analyse(profile(1500, undefined, "gravel")).pois.some((poi) => poi.kind === "gravel"));
-	assert.ok(api.analyse(profile(2000, undefined, "gravel")).pois.some((poi) => poi.kind === "gravel"));
-	assert.ok(api.analyse(profile(1500, undefined, "gravel"), { gravelLength: 1500 }).pois.some((poi) => poi.kind === "gravel"));
-	assert.ok(api.analyse(profile(500, undefined, "technical")).pois.some((poi) => poi.kind === "technical"));
+	assert.ok(!api.analyse(profile(200, undefined, "technical")).pois.some((poi) => poi.kind === "technical"));
+	assert.ok(!api.analyse(profile(1400, undefined, "gravel")).pois.some((poi) => poi.kind === "gravel"));
+	assert.ok(api.analyse(profile(1500, undefined, "gravel")).pois.some((poi) => poi.kind === "gravel"));
+	assert.ok(api.analyse(profile(1000, undefined, "gravel"), { gravelLength: 1000 }).pois.some((poi) => poi.kind === "gravel"));
+	assert.ok(api.analyse([{ distance: 0, point: [23, 61], character: "technical" }, { distance: 250, point: [23.001, 61] }]).pois.some((poi) => poi.kind === "technical"));
 	assert.ok(!api.analyse(profile(500, undefined, "technical"), { technicalLength: 600 }).pois.some((poi) => poi.kind === "technical"));
 });
 
@@ -394,4 +396,22 @@ test("missing MTB ranges remain separate across rated portions and exclude unrel
 	const rated = api.analyse(points);
 	assert.equal(rated.missingMtbDistance, 800);
 	assert.deepEqual(Array.from(rated.missingMtbSections, (section) => [section.start, section.end]), [[0, 200], [300, 500], [1000, 1400]]);
+});
+
+
+test("Technical descriptions show each section's actual grades and exclude intervening gaps", function () {
+	const points = profile(2000);
+	for (const point of points) {
+		point.character = point.distance < 1100 || point.distance >= 1400 ? "technical" : "paved";
+		point.mtbGrade = point.distance < 500 ? 1 : point.distance < 600 ? 5 : point.distance < 1100 ? 3 : 2;
+		if (point.distance >= 500 && point.distance < 600) point.character = "paved";
+	}
+	const result = api.analyse(points), sections = result.sections.filter((section) => section.kind === "technical"),
+		pois = result.pois.filter((poi) => poi.kind === "technical");
+	assert.equal(sections.length, 2);
+	assert.match(api.sectionDetail(sections[0]), /S1–S3 riding/);
+	assert.match(pois[0].reason, /S1–S3 riding/);
+	assert.match(api.sectionDetail(sections[1]), /S2 riding/);
+	assert.match(pois[1].reason, /S2 riding/);
+	assert.equal(pois[0].name, "Technical");
 });

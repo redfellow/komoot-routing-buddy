@@ -60,3 +60,24 @@ test("failed insertion restores a pre-existing inert state and reports the error
 	assert.equal(body.inert, true);
 	assert.match(messages[0].error, /Restored/);
 });
+
+
+test("route changes clear stale generated POIs even after insertion invalidated the analysis key", function () {
+	const check = source.slice(source.indexOf("\tfunction checkRouteChanged(reason)"), source.indexOf("\tlet poiOperation;"));
+	let calls = 0;
+	const tour = {}, context = {
+		poiOperation: undefined, checkedRouteKey: undefined, config: { visualsEnabled: true },
+		routeSnapshot: () => ({ route: {} }), rideCoordinates: () => tour,
+		KrbKomootPoiInsert: { clearStale(value) { assert.equal(value, tour); calls++; } },
+	};
+	runInNewContext(`${check}\nthis.check = checkRouteChanged;`, context);
+	context.check();
+	assert.equal(calls, 1);
+	context.poiOperation = {};
+	context.check();
+	assert.equal(calls, 1);
+	context.poiOperation = undefined;
+	context.config.visualsEnabled = false;
+	context.check();
+	assert.equal(calls, 1);
+});

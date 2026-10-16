@@ -14,8 +14,8 @@
 		steepLength: 300,
 		steepGradient: 8,
 		trailLength: 500,
-		gravelLength: 2000,
-		technicalLength: 500,
+		gravelLength: 1500,
+		technicalLength: 250,
 		trailGap: 150,
 		smoothingDistance: 100,
 	});
@@ -181,7 +181,7 @@
 			totals = { trail: 0, technical: 0, gravel: 0, track: 0, paved: 0, unpaved: 0, unknown: 0 },
 			surfaceTotals = { paved: 0, unpaved: 0, unknown: 0 }, surfaceDetailTotals = {}, wayTypeTotals = {};
 		function add(kind, name, start, end, details = {}) {
-			const reason = { trails: "Start of sustained trail riding", gravel: "Start of sustained gravel or dirt riding", technical: "Start of sustained S1–S5 riding", hills: "Start of concentrated climbing", steep: "Start of a sustained steep climb" }[kind];
+			const reason = { trails: "Start of sustained trail riding", gravel: "Start of sustained gravel or dirt riding", technical: `Start of sustained ${technicalRating(details)} riding`, hills: "Start of concentrated climbing", steep: "Start of a sustained steep climb" }[kind];
 			sections.push({ kind, start, end, reason, ...details });
 			pois.push({ id: `${kind}:${start.toFixed(1)}`, kind, name, ...atDistance(points, start), end, reason, ...details });
 		}
@@ -271,7 +271,7 @@
 			let section;
 			function finish() {
 				if (section && section.characterDistance + 0.000001 >= minimum)
-					add(kind, name, section.start, section.end, { characterDistance: section.characterDistance, share: section.characterDistance / (section.end - section.start), ...(kind === "trails" ? { trailDistance: section.characterDistance } : {}) });
+					add(kind, name, section.start, section.end, { characterDistance: section.characterDistance, share: section.characterDistance / (section.end - section.start), ...(kind === "technical" ? { minGrade: section.minGrade, maxGrade: section.maxGrade } : {}), ...(kind === "trails" ? { trailDistance: section.characterDistance } : {}) });
 				section = undefined;
 			}
 			for (let index = 0; index < points.length - 1; index++) {
@@ -284,6 +284,10 @@
 				if (!section) section = { start: point.distance, end, characterDistance: 0 };
 				section.end = end;
 				section.characterDistance += end - point.distance;
+				if (character === "technical" && Number.isInteger(point.mtbGrade) && point.mtbGrade >= 1 && point.mtbGrade <= 5) {
+					section.minGrade = Math.min(section.minGrade ?? point.mtbGrade, point.mtbGrade);
+					section.maxGrade = Math.max(section.maxGrade ?? point.mtbGrade, point.mtbGrade);
+				}
 				if (point.breakAfter) finish();
 			}
 			finish();
@@ -354,10 +358,14 @@
 		}
 		return Object.entries(groups).sort((a, b) => b[1] - a[1]).map(([label, distance]) => ({ label, distance }));
 	}
+	function technicalRating(section) {
+		if (!Number.isInteger(section.minGrade) || !Number.isInteger(section.maxGrade)) return "technical";
+		return section.minGrade === section.maxGrade ? `S${section.minGrade}` : `S${section.minGrade}–S${section.maxGrade}`;
+	}
 	function sectionDetail(section) {
 		const labels = { trail: "trail", technical: "technical trail", gravel: "gravel", paved: "paved", unknown: "unmapped" };
 		if (Number.isFinite(section.characterDistance)) {
-			const label = { trails: "trail riding", gravel: "gravel or dirt", technical: "S1–S5 riding" }[section.kind];
+			const label = { trails: "trail riding", gravel: "gravel or dirt", technical: `${technicalRating(section)} riding` }[section.kind];
 			const mixed = section.otherCharacters?.length ? `, with short ${section.otherCharacters.map((character) => labels[character] || character).join(" / ")} stretches` : "";
 			return `${(section.characterDistance / 1000).toFixed(1)} km of ${label}${mixed}`;
 		}

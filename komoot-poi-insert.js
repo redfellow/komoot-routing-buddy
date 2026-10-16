@@ -6,7 +6,7 @@
 			this.name = "PoiInsertionError";
 		}
 	}
-	const categories = Object.freeze({ trails: 24, gravel: 24, technical: 24, hills: 43, steep: 43, halfway: 35 });
+	const categories = Object.freeze({ trails: 5, gravel: 35, technical: 5, hills: 35, steep: 43, halfway: 35 });
 	function distance(a, b) {
 		const radians = Math.PI / 180,
 			value = Math.sin((b.lat - a.lat) * radians / 2) ** 2 +
@@ -77,10 +77,57 @@
 
 	function referenceState(tour) {
 		return references(tour).map(function (entry) {
-			return JSON.stringify(Object.fromEntries(["type", "id", "location", "name", "cnwId", "cnwName", "cnwCategory", "cnwDescription"]
-				.map((key) => [key, entry.reference.get(key)])));
+			const reference = entry.reference,
+				custom = reference.get("cnwId") != null,
+				state = Object.fromEntries(["type", "id", "location", "name", "cnwId", "cnwName", "cnwCategory", "cnwDescription"]
+					.map((key) => [key, reference.get(key)]));
+			// Komoot rebuilds cnw references from the routing response with cnwName,
+			// omitting the redundant plain name and sometimes an empty description.
+			if (custom) {
+				state.cnwName = state.cnwName ?? state.name;
+				delete state.name;
+				state.cnwDescription = state.cnwDescription ?? "";
+			}
+			return JSON.stringify(state);
 		});
 	}
+	const generatedPrefix = "KRB generated POI v1:";
+	function geometryKey(items) {
+		let hash = 2166136261;
+		const value = JSON.stringify(items.map((point) => [point.lat, point.lng]));
+		for (let index = 0; index < value.length; index++) hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
+		return `${items.length}:${hash >>> 0}`;
+	}
+	function generated(reference) {
+		const description = reference.get("cnwDescription");
+		if (typeof description !== "string" || !description.startsWith(generatedPrefix)) return;
+		try {
+			const value = JSON.parse(description.slice(generatedPrefix.length));
+			if (value && typeof value.geometry === "string" && typeof value.name === "string" &&
+				value.name === reference.get("cnwName") && value.category === reference.get("cnwCategory")) return value;
+		}
+		catch (error) {
+			console.debug("Invalid generated POI metadata:", error.message);
+		}
+	}
+	function clearStale(tour) {
+		if (!supported(tour)) return 0;
+		const owned = references(tour).map((entry) => ({ reference: entry.reference, marker: generated(entry.reference) })).filter((entry) => entry.marker);
+		if (!owned.length) return 0;
+		const key = geometryKey(coordinates(tour));
+		let cleared = 0;
+		for (const { reference, marker } of owned) {
+			if (!marker || marker.geometry === key || typeof reference.set !== "function") continue;
+			reference.set({ cnwId: null, cnwName: null, cnwCategory: null, cnwDescription: null, name: marker.originalName ?? null }, { silent: true });
+			cleared++;
+		}
+		if (cleared) {
+			const waypoints = tour.link("way_points");
+			waypoints.trigger("change:path", waypoints, { action: "waypoint_customize" });
+		}
+		return cleared;
+	}
+
 	async function insert(tour, pois, control) {
 		if (!supported(tour) || !Array.isArray(pois) || !pois.length || pois.length > 100)
 			throw new PoiInsertionError("Komoot POI insertion is unavailable.");
@@ -118,23 +165,50 @@
 		}
 		if (control.cancelled() || !control.isCurrent()) return { added: 0, skipped, cancelled: true };
 		if (!plans.length) return { added: 0, skipped, cancelled: false };
+		const cumulative = [0];
+		for (let index = 1; index < before.length; index++) cumulative.push(cumulative.at(-1) + distance(before[index - 1], before[index]));
 		let mutated = false;
 		try {
 			for (const plan of plans) {
 				if (control.cancelled()) throw new PoiInsertionError("POI insertion cancelled.");
-				const at = references(tour).findIndex((entry) => entry.index > plan.placement.index);
+				const current = references(tour),
+					coincident = current.filter(function (entry) {
+						const reference = entry.reference, location = reference.get("location"), index = Math.floor(entry.index);
+						if (!Number.isFinite(entry.index) || entry.index < 0 || entry.index > before.length - 1 || !location ||
+							reference.get("type") !== "point" || reference.get("cnwId") || typeof reference.set !== "function") return false;
+						const progress = cumulative[index] + (cumulative[Math.min(index + 1, before.length - 1)] - cumulative[index]) * (entry.index - index);
+						return Math.abs(progress - (plan.poi.geometryDistance ?? plan.poi.distance)) <= 100 &&
+							distance(location, plan.placement.location) <= 100;
+					}).sort((a, b) => distance(a.reference.get("location"), plan.placement.location) - distance(b.reference.get("location"), plan.placement.location))[0],
+					marker = { geometry: geometryKey(before), name: plan.poi.name, category: categories[plan.poi.kind], originalName: coincident?.reference.get("name") ?? null },
+					metadata = { cnwId: plan.id, cnwName: plan.poi.name, cnwCategory: categories[plan.poi.kind], cnwDescription: generatedPrefix + JSON.stringify(marker) };
+				if (coincident && typeof coincident.reference.set === "function") {
+					// Reuse nearby ordinary waypoints without moving them. The progress
+					// check keeps separate visits to the same location on loops distinct.
+					const originalIndex = originalReferences.indexOf(referenceState(tour)[current.indexOf(coincident)]);
+					if (originalIndex < 0) throw new PoiInsertionError("The existing waypoint could not be verified.");
+					mutated = true;
+					coincident.reference.set(metadata, { silent: true });
+					plan.customizedReference = originalReferences[originalIndex];
+					plan.expectedReference = referenceState(tour)[current.indexOf(coincident)];
+					continue;
+				}
+				const at = current.findIndex((entry) => entry.index > plan.placement.index);
 				if (at < 1) throw new PoiInsertionError("Komoot cannot insert this POI between existing waypoints.");
 				mutated = true;
 				await tour.wpAdd({ type: "point", index: plan.placement.index, location: plan.placement.location,
-					cnwId: plan.id, cnwName: plan.poi.name, name: plan.poi.name, cnwCategory: categories[plan.poi.kind], cnwDescription: "" }, { at, silent: true });
+					...metadata }, { at, silent: true });
 			}
 			await tour.fetchByWaypoints(null, {});
 			if (control.cancelled()) throw new PoiInsertionError("POI insertion cancelled.");
 			if (!sameGeometry(before, coordinates(tour))) throw new PoiInsertionError("Komoot changed the route while adding POIs.");
 			const actual = references(tour);
 			const remaining = referenceState(tour);
+			const customized = plans.filter((plan) => plan.customizedReference !== undefined);
 			for (const reference of originalReferences) {
-				const index = remaining.indexOf(reference);
+				const planIndex = customized.findIndex((plan) => plan.customizedReference === reference),
+					expected = planIndex >= 0 ? customized.splice(planIndex, 1)[0].expectedReference : reference,
+					index = remaining.indexOf(expected);
 				if (index < 0) throw new PoiInsertionError("Komoot changed an existing route waypoint.");
 				remaining.splice(index, 1);
 			}
@@ -142,6 +216,13 @@
 				const reference = actual.find((entry) => entry.reference.get("cnwId") === plan.id)?.reference;
 				if (!reference || reference.get("cnwName") !== plan.poi.name || reference.get("cnwCategory") !== categories[plan.poi.kind])
 					throw new PoiInsertionError("Komoot did not retain an approved POI's name or icon.");
+			}
+			// Recalculation can insert coordinate vertices without changing the route.
+			// Refresh all owned markers only after the geometry checks have passed.
+			const key = geometryKey(coordinates(tour));
+			for (const entry of actual) {
+				const marker = generated(entry.reference);
+				if (marker) entry.reference.set({ cnwDescription: generatedPrefix + JSON.stringify({ ...marker, geometry: key }) }, { silent: true });
 			}
 			const waypoints = tour.link("way_points");
 			waypoints.trigger("change:path", waypoints, { action: "waypoint_add_by_api" });
@@ -158,5 +239,5 @@
 			throw new PoiInsertionError(`${error.message} The original route was restored.`);
 		}
 	}
-	globalThis.KrbKomootPoiInsert = { insert, supported, sameGeometry, existingPois, PoiInsertionError };
+	globalThis.KrbKomootPoiInsert = { insert, supported, sameGeometry, existingPois, clearStale, PoiInsertionError };
 })();

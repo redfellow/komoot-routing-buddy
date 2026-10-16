@@ -469,8 +469,8 @@
 						<p class="krb-ride__muted">Fine-tune which sections are worth marking.</p>
 						<fieldset data-ride="options"><legend class="krb-ride__sr-only">Section thresholds</legend>
 						<label>Minimum Trails section <span><input data-ride="trail-length" type="number" min="1" value="500" /> m</span></label>
-						<label>Minimum Gravel section <span><input data-ride="gravel-length" type="number" min="1" value="2000" /> m</span></label>
-						<label>Minimum Technical section <span><input data-ride="technical-length" type="number" min="1" value="500" /> m</span></label>
+						<label>Minimum Gravel section <span><input data-ride="gravel-length" type="number" min="1" value="1500" /> m</span></label>
+						<label>Minimum Technical section <span><input data-ride="technical-length" type="number" min="1" value="250" /> m</span></label>
 						<label>Join section gaps up to <span><input data-ride="trail-gap" type="number" min="0" value="150" /> m</span></label>
 						<label>Hills: ascent within 5 km <span><input data-ride="ascent" type="number" min="1" value="150" /> m</span></label>
 						<label>Steep climb gradient <span><input data-ride="gradient" type="number" min="1" value="8" /> %</span></label>
@@ -592,5 +592,12 @@
 			field("analyse").click();
 		});
 	}
-	globalThis.KrbRideDialog = { attach };
+	function suspend() {
+		globalThis.KrbRouteDialog?.cancel();
+		if (!dialog) return;
+		invalidate();
+		dialog.hidden = true;
+		trigger.setAttribute("aria-expanded", "false");
+	}
+	globalThis.KrbRideDialog = { attach, suspend };
 })();

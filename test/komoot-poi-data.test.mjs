@@ -42,11 +42,26 @@ test("approved POIs enforce the user name limit, uniqueness, location and catego
 });
 
 
-test("Gravel and Technical use verified Segment start references and concise approved names", function () {
+test("Gravel and Technical use Checkpoint and Danger while retaining concise approved names", function () {
 	for (const kind of ["gravel", "technical"]) {
 		const name = kind === "gravel" ? "Gravel" : "Technical";
 		const pois = context.KrbKomootPoiData.approved([{ id: `${kind}:0`, kind, name, distance: 0, point: [23, 61] }]);
 		assert.equal(pois[0].name, name);
-		assert.equal(context.KrbKomootPoiData.categoryIds[kind], 24);
+		assert.equal(context.KrbKomootPoiData.categoryIds[kind], kind === "gravel" ? 35 : 5);
+	}
+});
+
+
+test("approved Garmin-friendly categories agree with the page insertion mappings", function () {
+	for (const [kind, name, category, label] of [
+		["halfway", "Halfway", 35, "Checkpoint"],
+		["gravel", "Gravel", 35, "Checkpoint"],
+		["hills", "Hills", 35, "Checkpoint"],
+		["trails", "Trails", 5, "Danger"],
+		["technical", "Technical", 5, "Danger"],
+	]) {
+		const [poi] = api.approved([{ id: kind, kind, name, distance: 0, point: [23, 61] }]);
+		assert.equal(poi.category, category);
+		assert.equal(poi.categoryLabel, label);
 	}
 });
