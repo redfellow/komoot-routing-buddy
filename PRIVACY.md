@@ -14,6 +14,8 @@ The ride overview also reads the current route's elevation and waypoint metadata
 
 Generated POIs store a versioned ownership marker, generated name and icon category, route-coordinate fingerprint and any original waypoint name in Komoot’s custom POI description. This description can be visible in Komoot or exported to a navigation device. After route geometry changes, the extension removes stale generated customizations while retaining the ordinary waypoints and restoring original names. User-renamed or restyled points and unrelated custom POIs are preserved. This metadata is part of the Komoot route and is not sent to a project-operated server.
 
+With Estimate gained Squadrats enabled, route analysis reads the visited-tile collection already loaded by the separate Squadrats extension and calculates planned tile, Yard and largest-square gains locally at both grid sizes. Komoot Routing Buddy does not request Squadrats account credentials, fetch account data itself or upload the collection. Estimates are discarded when the route, loaded collection or setting changes.
+
 ## Preferences and browser synchronization
 
 Trail colours, rules, map options, remembered layer selections, Squadrats opacity and trail-check preferences use browser sync storage. When Chrome Sync is enabled, Google synchronizes these preferences across your signed-in Chrome browsers. Firefox may synchronize preferences through Mozilla when browser extension synchronization is enabled. Browser-account settings control synchronization. Country databases, online OSM caches, sidebar state, panel position, quick-guide display status and update job state are stored locally.
