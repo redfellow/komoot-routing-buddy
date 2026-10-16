@@ -167,6 +167,7 @@ async function saveOptions() {
 			narrowWarningWidth: Number(document.querySelector("#narrowWarningWidth").value),
 			maximumTrailLevel: document.querySelector("#maximumLevel").value,
 			squadratsBelowRoads: document.querySelector("#squadratsBelowRoads").checked,
+			estimateSquadrats: document.querySelector("#estimateSquadrats").checked,
 			colourLabels: document.querySelector("#colourLabels").checked,
 			emphasizeRoadNumbers: document.querySelector("#emphasizeRoadNumbers").checked,
 			showHazards: document.querySelector("#showHazards").checked,
@@ -199,6 +200,7 @@ document.querySelector("#restore").addEventListener("click", async function () {
 	document.querySelector("#squadratsOpacityValue").textContent =
 		`${popupSettings.DEFAULT_OPTIONS.squadratsOpacity}%`;
 	document.querySelector("#maximumLevel").value = popupSettings.DEFAULT_OPTIONS.maximumTrailLevel;
+	document.querySelector("#estimateSquadrats").checked = false;
 	document.querySelector("#squadratsBelowRoads").checked =
 		popupSettings.DEFAULT_OPTIONS.squadratsBelowRoads;
 	document.querySelector("#colourLabels").checked = popupSettings.DEFAULT_OPTIONS.colourLabels;
@@ -331,6 +333,8 @@ async function initialise() {
 	document.querySelector("#maximumLevel").value = options.maximumTrailLevel;
 	document.querySelector("#squadratsBelowRoads").checked = options.squadratsBelowRoads !== false;
 	document.querySelector("#squadratsBelowRoads").addEventListener("change", saveOptions);
+	document.querySelector("#estimateSquadrats").checked = options.estimateSquadrats === true;
+	document.querySelector("#estimateSquadrats").addEventListener("change", saveOptions);
 	document.querySelector("#colourLabels").checked = options.colourLabels === true;
 	document.querySelector("#emphasizeRoadNumbers").checked = options.emphasizeRoadNumbers === true;
 	document.querySelector("#emphasizeRoadNumbers").addEventListener("change", saveOptions);

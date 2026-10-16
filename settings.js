@@ -20,6 +20,7 @@
 		preloadRouteHazards: false,
 		squadratsOpacity: 50,
 		squadratsBelowRoads: true,
+		estimateSquadrats: false,
 		maximumTrailLevel: "S5",
 		rememberLayers: true,
 		rememberedLayers: {},
@@ -57,6 +58,7 @@
 		]);
 		const options = { ...DEFAULT_OPTIONS, ...(saved.trailOptions || {}) };
 		options.emphasizeRoadNumbers = options.emphasizeRoadNumbers === true;
+		options.estimateSquadrats = options.estimateSquadrats === true;
 		options.narrowWarningWidth = Number.isFinite(options.narrowWarningWidth)
 			? Math.round(Math.max(0.2, Math.min(1, options.narrowWarningWidth)) * 10) / 10
 			: 0.4;

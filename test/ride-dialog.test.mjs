@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 
-function fixture({ adapter = true, defer = false, deferInsert = false, stableGrades = false, existingPoi = false, poiCount, nativeAscent = false } = {}) {
+function fixture({ adapter = true, defer = false, deferInsert = false, stableGrades = false, existingPoi = false, poiCount, nativeAscent = false, deferSquadrats = false } = {}) {
 	const fields = {}, messages = [], calls = [], geometryCalls = [], pauses = [], listeners = [];
-	let trigger, resolveLoad, resolveInsert, checkData, checkState, checks = 0, mounts = 0, cancels = 0, loads = 0;
+	let trigger, resolveLoad, resolveInsert, resolveSquadrats, squadratsCalls = 0, checkData, checkState, checks = 0, mounts = 0, cancels = 0, loads = 0;
 	function element() {
 		return {
 			children: [], events: {}, attributes: {}, dataset: {}, value: "", disabled: false,
@@ -45,6 +45,13 @@ function fixture({ adapter = true, defer = false, deferInsert = false, stableGra
 			mount(host, callback, stateCallback) { mounts++; checkData = callback; checkState = stateCallback; },
 			cancel() { cancels++; },
 			setPaused(value) { pauses.push(value); },
+		},
+		KrbSquadratsEstimate: {
+			async estimate(data) {
+				squadratsCalls++;
+				if (deferSquadrats && squadratsCalls === 1) return await new Promise(function (resolve) { resolveSquadrats = resolve; });
+				return data.metrics;
+			},
 		},
 		KrbRouteCheck: {
 			async collectWithRetry() {
@@ -89,7 +96,7 @@ function fixture({ adapter = true, defer = false, deferInsert = false, stableGra
 		fields.analyse.click();
 		return { type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: messages.at(-1).requestId, route: {}, nativeProfile: {}, routeKey: "original-route" };
 	}
-	return { fields, calls, messages, geometryCalls, pauses, receive, snapshot, checks: () => checks, mounts: () => mounts, cancels: () => cancels, checkData: (data) => checkData(data), checkState: (state) => checkState(state), resolve: () => resolveLoad([]), resolveInsert: () => resolveInsert({ added: 1, skipped: 0 }), loads: () => loads };
+	return { fields, calls, messages, geometryCalls, pauses, receive, snapshot, resolveSquadrats: (value) => resolveSquadrats(value), suspend: () => context.KrbRideDialog.suspend(), checks: () => checks, mounts: () => mounts, cancels: () => cancels, checkData: (data) => checkData(data), checkState: (state) => checkState(state), resolve: () => resolveLoad([]), resolveInsert: () => resolveInsert({ added: 1, skipped: 0 }), loads: () => loads };
 }
 async function flush() {
 	for (let index = 0; index < 15; index++) await Promise.resolve();
@@ -515,4 +522,84 @@ test("missing-grades button highlights every gap without moving the camera and r
 	const count = f.geometryCalls.length;
 	f.fields["highlight-grades"].click();
 	assert.equal(f.geometryCalls.length, count);
+});
+
+
+function squadratsMetrics(positive = true) {
+	return [14, 17].map((zoom) => ({ zoom, before: { count: 100, yard: 10, square: 3 }, after: { count: 103, yard: 14, square: 4 },
+		gained: positive ? { count: 3, yard: 4, square: 1 } : { count: 0, yard: 0, square: 0 } }));
+}
+
+test("analysis renders all six Squadrats gains between ride stats and shape with dimension detail", async function () {
+	const f = fixture(), reply = f.snapshot();
+	reply.squadratsEstimate = { status: "ready", metrics: squadratsMetrics() };
+	f.receive(reply);
+	await flush();
+	assert.equal(f.fields.squadrats.hidden, false);
+	assert.deepEqual(Array.from(f.fields["squadrats-chips"].children, (chip) => chip.children[2].textContent),
+		["Squadrats", "Yard", "Übersquadrat", "Squadratinhos", "Yardinho", "Übersquadratinho"]);
+	assert.match(f.fields["squadrats-chips"].children[5].title, /3×3 → 4×4/);
+	const source = readFileSync(new URL("../ride-dialog.js", import.meta.url), "utf8");
+	assert.ok(source.indexOf('data-ride="trail-total"') < source.indexOf('data-ride="squadrats"'));
+	assert.ok(source.indexOf('data-ride="squadrats"') < source.indexOf('data-ride="shape"'));
+});
+
+test("zero gains are distinct from partial or unavailable Squadrats data", async function () {
+	for (const [data, text] of [
+		[{ status: "ready", metrics: squadratsMetrics(false) }, "No new Squadrats"],
+		[{ status: "unavailable", message: "Enable Squadrats" }, "Enable Squadrats"],
+		[{ status: "ready", metrics: [{ zoom: 14, error: "Collection not loaded" }, squadratsMetrics(false)[1]] }, "Collection not loaded"],
+	]) {
+		const f = fixture(), reply = f.snapshot();
+		reply.squadratsEstimate = data;
+		f.receive(reply);
+		await flush();
+		assert.match(f.fields["squadrats-status"].textContent, new RegExp(text));
+		assert.equal(f.fields["squadrats-chips"].children.length, 0);
+	}
+});
+
+test("route edits, setting Off and suspension reject late Squadrats results", async function () {
+	for (const action of ["route", "setting", "suspend"]) {
+		const f = fixture({ deferSquadrats: true }), reply = f.snapshot();
+		reply.squadratsEstimate = { status: "ready" };
+		f.receive(reply);
+		await flush();
+		if (action === "route") f.receive({ type: "KRB_ROUTE_CHANGED" });
+		else if (action === "setting") f.receive({ type: "KRB_SQUADRATS_CHANGED", enabled: false });
+		else f.suspend();
+		f.resolveSquadrats(squadratsMetrics());
+		await flush();
+		assert.equal(f.fields.squadrats.hidden, true);
+	}
+});
+
+test("collection replacement refreshes only Squadrats and ignores stale or foreign replies", async function () {
+	const f = fixture(), reply = f.snapshot();
+	f.receive(reply);
+	await flush();
+	f.receive({ type: "KRB_SQUADRATS_CHANGED", enabled: true });
+	const request = f.messages.at(-1);
+	assert.equal(request.type, "KRB_SQUADRATS_REQUEST");
+	f.receive({ type: "KRB_SQUADRATS_DATA", requestId: request.requestId, routeKey: "other", data: { status: "ready", metrics: squadratsMetrics() } });
+	await flush();
+	assert.equal(f.fields.squadrats.hidden, true);
+	f.receive({ type: "KRB_SQUADRATS_DATA", requestId: request.requestId, routeKey: reply.routeKey, data: { status: "ready", metrics: squadratsMetrics() } });
+	await flush();
+	assert.equal(f.fields.squadrats.hidden, false);
+	assert.equal(f.fields["ride-state"].textContent, "Ready");
+	assert.equal(f.checks(), 1);
+});
+
+
+test("disabling Squadrats while the ride profile loads cannot resurrect an old snapshot estimate", async function () {
+	const f = fixture({ defer: true }), reply = f.snapshot();
+	reply.squadratsEstimate = { status: "ready", metrics: squadratsMetrics() };
+	f.receive(reply);
+	await flush();
+	f.receive({ type: "KRB_SQUADRATS_CHANGED", enabled: false });
+	f.resolve();
+	await flush();
+	assert.equal(f.fields.squadrats.hidden, true);
+	assert.equal(f.fields["ride-state"].textContent, "Ready");
 });

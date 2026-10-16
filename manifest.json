@@ -29,6 +29,7 @@
 				"sidebar.js",
 				"route-check.js",
 				"ride-overview.js",
+				"squadrats-estimate.js",
 				"komoot-poi-data.js",
 				"komoot-pois.js",
 				"ride-dialog.js",
@@ -42,7 +43,7 @@
 	],
 	"web_accessible_resources": [
 		{
-			"resources": ["map-bridge.js", "komoot-poi-insert.js", "hazard-icons.png", "popup.html"],
+			"resources": ["squadrats-estimate.js", "map-bridge.js", "komoot-poi-insert.js", "hazard-icons.png", "popup.html"],
 			"matches": ["https://www.komoot.com/*"]
 		}
 	],

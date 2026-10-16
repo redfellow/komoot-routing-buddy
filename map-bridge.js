@@ -1161,7 +1161,7 @@
 	}
 
 	function postStatus(detail) {
-		window.postMessage({ type: "KRB_MAP_STATUS", detail: { ...detail, squadratsAvailable: (map?.getStyle()?.layers || []).some((layer) => layer.id.startsWith("squadrats-")) } }, location.origin);
+		window.postMessage({ type: "KRB_MAP_STATUS", detail: { ...detail, squadratsAvailable: Boolean(squadratsEstimateContext().provider) || (map?.getStyle()?.layers || []).some((layer) => layer.id.startsWith("squadrats-")) } }, location.origin);
 	}
 
 	window.addEventListener("message", function (event) {
@@ -1276,6 +1276,54 @@
 			);
 		}, 2000);
 	}
+	let squadratsEstimateState = [], squadratsEstimateGeneration = 0, squadratsRefreshingCollection;
+	function squadratsEstimateContext() {
+		try {
+			return {
+				provider: typeof squadrats === "object" ? squadrats : undefined,
+				tiler: typeof polylib === "object" ? polylib : undefined,
+				encode: typeof MAP === "object" ? MAP.POLYLINE?.encodePolyline : undefined,
+				polyline: typeof MAP === "object" ? MAP.POLYLINE : undefined,
+			};
+		}
+		catch (error) {
+			console.debug("Squadrats context not ready:", error.message);
+			return {};
+		}
+	}
+	function watchSquadratsEstimate(notify = true) {
+		const enabled = config?.visualsEnabled !== false && config?.estimateSquadrats === true,
+			context = enabled ? squadratsEstimateContext() : {},
+			provider = context.provider,
+			state = [enabled, provider, provider?.enabled, provider?.config, context.tiler, context.encode,
+				provider?.raw?.[14], provider?.raw?.[17], provider?.raw?.[14]?.size, provider?.raw?.[17]?.size];
+		// Never relabel a previous account's collection as the newly selected context.
+		if (!enabled) squadratsRefreshingCollection = undefined;
+		else if (squadratsEstimateState[3] && state[3] !== squadratsEstimateState[3] &&
+			state[6] === squadratsEstimateState[6] && state[7] === squadratsEstimateState[7])
+			squadratsRefreshingCollection = [state[6], state[7]];
+		if (squadratsRefreshingCollection && state[6] !== squadratsRefreshingCollection[0] && state[7] !== squadratsRefreshingCollection[1])
+			squadratsRefreshingCollection = undefined;
+		if (state.some((value, index) => value !== squadratsEstimateState[index])) {
+			squadratsEstimateState = state;
+			squadratsEstimateGeneration++;
+			if (notify) window.postMessage({ type: "KRB_SQUADRATS_CHANGED", enabled }, location.origin);
+		}
+		return { enabled, context, generation: squadratsEstimateGeneration };
+	}
+	function readSquadratsEstimate(snapshot) {
+		const { enabled, context, generation } = watchSquadratsEstimate(false);
+		if (!enabled) return { status: "disabled", generation };
+		if (squadratsRefreshingCollection) return { status: "unavailable", message: "Squadrats collection is refreshing.", generation };
+		try {
+			const data = globalThis.KrbSquadratsEstimate?.read(context, rideCoordinates(snapshot.route));
+			return { ...(data || { status: "unavailable", message: "Squadrats estimator is not ready." }), generation };
+		}
+		catch (error) {
+			return { status: "unavailable", message: error.message, generation };
+		}
+	}
+
 	let checkedRouteKey;
 	let routeHighlightTimer;
 	let routePreviewTimer, routePreviewId;
@@ -1448,6 +1496,22 @@
 		if (event.source !== window || event.origin !== location.origin) return;
 		if (event.data?.type === "KRB_POI_CANCEL" && poiOperation?.id === event.data.requestId) poiOperation.cancelled = true;
 		if (event.data?.type === "KRB_POI_ADD" && config?.visualsEnabled !== false) void addApprovedPois(event.data);
+		if (event.data?.type === "KRB_SQUADRATS_REQUEST" && /^squadrats:\d+$/.test(event.data.requestId || "")) {
+			if (config?.visualsEnabled === false || config?.estimateSquadrats !== true) {
+				window.postMessage({ type: "KRB_SQUADRATS_DATA", requestId: event.data.requestId, routeKey: event.data.routeKey, data: { status: "disabled" } }, location.origin);
+				return;
+			}
+			try {
+				const snapshot = routeSnapshot();
+				if (snapshot.routeKey !== event.data.routeKey) return;
+				window.postMessage({ type: "KRB_SQUADRATS_DATA", requestId: event.data.requestId, routeKey: snapshot.routeKey,
+					data: readSquadratsEstimate(snapshot) }, location.origin);
+			}
+			catch (error) {
+				window.postMessage({ type: "KRB_SQUADRATS_DATA", requestId: event.data.requestId, routeKey: event.data.routeKey,
+					data: { status: "unavailable", message: error.message } }, location.origin);
+			}
+		}
 		if (event.data?.type === "KRB_ROUTE_SNAPSHOT") {
 			try {
 				const snapshot = routeSnapshot();
@@ -1466,6 +1530,7 @@
 						globalThis.KrbKomootPoiInsert?.supported(rideCoordinates(snapshot.route, true)) === true;
 				}
 				checkedRouteKey = snapshot.routeKey;
+				if (event.data.includeProfile === true) snapshot.squadratsEstimate = readSquadratsEstimate(snapshot);
 				window.postMessage(
 					{ type: "KRB_ROUTE_SNAPSHOT_DATA", requestId: event.data.requestId, ...snapshot },
 					location.origin,
@@ -1572,6 +1637,7 @@
 		scheduleApply();
 	}
 	function onSquadratsSource(event) {
+		if (config?.estimateSquadrats === true && event.sourceId?.startsWith("squadrats-")) watchSquadratsEstimate();
 		if (event.sourceId === "komoot_tour" && event.sourceDataType === "content") {
 			const present = (map.getStyle()?.layers || []).some(function (layer) {
 				return layer.id.startsWith("squadrats-");
@@ -1623,6 +1689,7 @@
 		const incoming = event.data.config;
 		if (!incoming || !/^S[0-5]$/.test(incoming.maximumTrailLevel) || !incoming.rules) return;
 		config = incoming;
+		watchSquadratsEstimate();
 		if (config.visualsEnabled === false) {
 			clearSquadratsWait();
 			clearTimeout(scheduled);
@@ -1638,6 +1705,7 @@
 	});
 
 	setInterval(function () {
+		watchSquadratsEstimate();
 		if (map && !document.contains(map.getCanvas())) {
 			if (checkedRouteKey && !poiOperation) window.postMessage({ type: "KRB_ROUTE_CHANGED" }, location.origin);
 			checkedRouteKey = undefined;

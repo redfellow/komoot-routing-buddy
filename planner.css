@@ -1478,3 +1478,63 @@
 	background: #fff;
 }
 #krb-panel > .krb-panel__hazards { display: none; }
+
+.krb-ride__squadrats {
+	margin: 16px 0 20px;
+}
+.krb-ride__squadrats[hidden] {
+	display: none;
+}
+.krb-ride__squadrats h3 {
+	margin: 0 0 10px;
+	font-size: 13px;
+	font-weight: 650;
+}
+.krb-ride__squadrat-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.krb-ride__squadrat-chip {
+	display: grid;
+	grid-template-columns: auto 24px;
+	align-items: center;
+	gap: 3px 8px;
+	min-width: 84px;
+	padding: 9px 12px 8px;
+	border-radius: 14px;
+	background: #63349a;
+	color: #20ef80;
+	box-shadow: 0 2px 5px #35104b20;
+}
+.krb-ride__squadrat-chip--small {
+	color: #20e6ed;
+}
+.krb-ride__squadrat-chip strong {
+	font-size: 25px;
+	font-weight: 750;
+	line-height: 1.15;
+	font-variant-numeric: tabular-nums;
+}
+.krb-ride__squadrat-chip svg {
+	width: 23px;
+	height: 23px;
+}
+.krb-ride__squadrat-label {
+	grid-column: 1 / -1;
+	color: #fff;
+	font-size: 11px;
+	line-height: 1.4;
+}
+.krb-ride__squadrat-chip:focus-visible {
+	outline: 3px solid #35682c;
+	outline-offset: 3px;
+}
+.krb-ride__squadrats p {
+	margin: 8px 0 0;
+	color: #58635a;
+	font-size: 12px;
+}

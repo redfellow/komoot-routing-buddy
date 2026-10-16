@@ -106,6 +106,10 @@
 
 	function installMapBridge() {
 		if (document.querySelector("#krb-map-bridge")) return;
+		const estimates = document.createElement("script");
+		estimates.src = globalThis.KrbBrowser.runtime.getURL("squadrats-estimate.js");
+		estimates.async = false;
+		(document.head || document.documentElement).append(estimates);
 		const insertion = document.createElement("script");
 		insertion.src = globalThis.KrbBrowser.runtime.getURL("komoot-poi-insert.js");
 		insertion.async = false;
@@ -133,6 +137,7 @@
 					preloadRouteHazards: options.preloadRouteHazards === true,
 					squadratsOpacity: options.squadratsOpacity,
 					squadratsBelowRoads: options.squadratsBelowRoads !== false,
+					estimateSquadrats: options.estimateSquadrats === true,
 					visualsEnabled: options.visualsEnabled !== false,
 					maximumTrailLevel: options.maximumTrailLevel,
 				},

@@ -4,6 +4,87 @@
 	let panel, trigger, dialog, controller, snapshot, result, gradeData, checksReady, requestId = 0, requestTimer, awaitingSnapshot = false, inserting = false;
 	const selections = new Map(), previewControls = [], choices = [];
 	let previewSequence = 0, activePreview;
+	let squadratsController, squadratsOutcome, squadratsEnabled, squadratsSequence = 0;
+	function clearSquadrats() {
+		squadratsSequence++;
+		squadratsController?.abort();
+		squadratsController = undefined;
+		squadratsOutcome = undefined;
+		if (dialog) field("squadrats").hidden = true;
+	}
+	function renderSquadrats() {
+		const host = field("squadrats"), chips = field("squadrats-chips"), notice = field("squadrats-status");
+		chips.replaceChildren();
+		host.hidden = !squadratsOutcome;
+		if (!squadratsOutcome) return;
+		if (!Array.isArray(squadratsOutcome)) {
+			notice.textContent = squadratsOutcome.message;
+			return;
+		}
+		const missing = [];
+		let count = 0;
+		for (const zoom of [14, 17]) {
+			const grid = squadratsOutcome.find((entry) => entry.zoom === zoom), small = zoom === 17,
+				labels = small ? ["Squadratinhos", "Yardinho", "Übersquadratinho"] : ["Squadrats", "Yard", "Übersquadrat"];
+			if (!grid || grid.error) {
+				missing.push(`${labels[0]}: ${grid?.error || "unavailable"}`);
+				continue;
+			}
+			for (const [index, key] of ["count", "yard", "square"].entries()) {
+				const gained = grid.gained[key];
+				if (!(gained > 0)) continue;
+				count++;
+				const chip = document.createElement("li"), value = document.createElement("strong"), label = document.createElement("span"),
+					icon = document.createElementNS("http://www.w3.org/2000/svg", "svg"), path = document.createElementNS("http://www.w3.org/2000/svg", "path"),
+					detail = key === "square" ? `${grid.before.square}×${grid.before.square} → ${grid.after.square}×${grid.after.square}` : `${grid.before[key].toLocaleString()} → ${grid.after[key].toLocaleString()}`;
+				chip.className = `krb-ride__squadrat-chip${small ? " krb-ride__squadrat-chip--small" : ""}`;
+				chip.tabIndex = 0;
+				chip.title = `${labels[index]}: ${detail}`;
+				chip.setAttribute("aria-label", `${labels[index]} +${gained}. ${detail}`);
+				value.textContent = `+${gained.toLocaleString()}`;
+				label.className = "krb-ride__squadrat-label";
+				label.textContent = labels[index];
+				icon.setAttribute("viewBox", "0 0 24 24");
+				icon.setAttribute("aria-hidden", "true");
+				icon.setAttribute("fill", "none");
+				icon.setAttribute("stroke", "currentColor");
+				icon.setAttribute("stroke-width", "1.8");
+				path.setAttribute("d", ["M3 3h8v8H3zM13 13h8v8h-8z", "M3 3h18v18H3zM3 9l6-6M3 15 15 3M3 21 21 3M9 21l12-12M15 21l6-6", "M3 3h18v18H3zM7 7h10v10H7z"][index]);
+				icon.append(path);
+				chip.append(value, icon, label);
+				chips.append(chip);
+			}
+		}
+		notice.textContent = missing.length ? missing.join(" · ") : count ? "Based on your planned route" : "No new Squadrats on this route";
+	}
+	async function estimateSquadrats(data) {
+		clearSquadrats();
+		if (!data) return;
+		squadratsEnabled = data.status !== "disabled";
+		if (!squadratsEnabled || !snapshot || !result || dialog.hidden) return;
+		const sequence = squadratsSequence, key = snapshot.routeKey, run = new AbortController();
+		squadratsController = run;
+		squadratsOutcome = { message: data.status === "ready" ? "Estimating gains…" : data.message || "Squadrats data is not ready." };
+		renderSquadrats();
+		if (data.status !== "ready") return;
+		try {
+			const value = await globalThis.KrbSquadratsEstimate.estimate(data, run.signal);
+			if (run.signal.aborted || sequence !== squadratsSequence || snapshot?.routeKey !== key || dialog.hidden) return;
+			squadratsOutcome = value;
+			renderSquadrats();
+		}
+		catch (error) {
+			if (run.signal.aborted || sequence !== squadratsSequence) return;
+			squadratsOutcome = { message: `Estimate unavailable: ${error.message}` };
+			renderSquadrats();
+		}
+	}
+	function requestSquadrats() {
+		clearSquadrats();
+		if (squadratsEnabled === false || !dialog || dialog.hidden || !snapshot || !result) return;
+		post({ type: "KRB_SQUADRATS_REQUEST", requestId: `squadrats:${squadratsSequence}`, routeKey: snapshot.routeKey });
+	}
+
 	function field(name) {
 		return dialog.querySelector(`[data-ride="${name}"]`);
 	}
@@ -56,6 +137,7 @@
 		target.addEventListener("focusout", hide);
 	}
 	function invalidate(text, changed) {
+		clearSquadrats();
 		const active = document.activeElement,
 			lostFocus = dialog && ["results", "preview", "segments"].some((name) => field(name).contains?.(active));
 		clearPreview();
@@ -142,6 +224,7 @@
 	}
 	function render() {
 		const { totals, totalDistance } = result;
+		renderSquadrats();
 		field("results").hidden = false;
 		field("ride-state").textContent = "Ready";
 		field("shape").open = true;
@@ -287,7 +370,7 @@
 		}
 	}
 	async function analyse(message) {
-		const run = controller;
+		const run = controller, squadratsGeneration = squadratsSequence;
 		try {
 			snapshot = { route: message.route, routeKey: message.routeKey, nativeProfile: message.nativeProfile };
 			globalThis.KrbKomootPois?.configure?.(message);
@@ -302,6 +385,8 @@
 			snapshot.points = points;
 			result = overview.analyse(points, options());
 			render();
+			if (squadratsGeneration === squadratsSequence) void estimateSquadrats(message.squadratsEstimate);
+			else requestSquadrats();
 			field("body").scrollTop = 0;
 		}
 		catch (error) {
@@ -448,6 +533,7 @@
 							<div><span data-ride="ascent-label">Ascent</span><strong data-ride="ascent-total"></strong></div>
 							<div><span>Trails & technical</span><strong data-ride="trail-total"></strong></div>
 						</div>
+						<section class="krb-ride__squadrats" data-ride="squadrats" aria-label="Estimated Squadrats gains" hidden><h3>Estimated Squadrats gains</h3><ul class="krb-ride__squadrat-chips" data-ride="squadrats-chips"></ul><p data-ride="squadrats-status" role="status"></p></section>
 						<details class="krb-ride__shape" data-ride="shape" open><summary>The shape of your ride</summary>
 						<div class="krb-ride__timeline" data-ride="character" role="group" aria-label="Route character by distance"></div>
 						<div class="krb-ride__scale"><span>Start</span><span>Halfway</span><span>Finish</span></div>
@@ -561,6 +647,13 @@
 	}
 	window.addEventListener("message", function (event) {
 		if (event.source !== window || event.origin !== location.origin) return;
+		if (event.data?.type === "KRB_SQUADRATS_CHANGED") {
+			squadratsEnabled = event.data.enabled === true;
+			if (squadratsEnabled) requestSquadrats();
+			else clearSquadrats();
+		}
+		if (event.data?.type === "KRB_SQUADRATS_DATA" && event.data.requestId === `squadrats:${squadratsSequence}` && snapshot?.routeKey === event.data.routeKey)
+			void estimateSquadrats(event.data.data);
 		if (event.data?.type === "KRB_OSM_DATA_UPDATED" && gradeData) {
 			gradeData = undefined;
 			invalidate("Trail data updated. Analyse again before generating POIs.", "Trail data updated — reanalyse");

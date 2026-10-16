@@ -1045,6 +1045,7 @@ test("Squadrats source completion gates styling with a bounded fallback", functi
 	let applied = 0;
 	const timers = [];
 	const context = {
+		config: { estimateSquadrats: false },
 		applying: false,
 		needsApply: false,
 		scheduled: undefined,

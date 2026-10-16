@@ -19,6 +19,7 @@ export const runtimeFiles = [
 	"sidebar.js",
 	"route-check.js",
 	"ride-overview.js",
+	"squadrats-estimate.js",
 	"komoot-poi-data.js",
 	"komoot-pois.js",
 	"komoot-poi-insert.js",
