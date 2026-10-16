@@ -1,6 +1,8 @@
 # Komoot Routing Buddy
 
-Make mountain bike trails easier to read on Komoot. Colour S0–S5 trails, show mapped hazards and check the trails along your planned route. The development version also offers a ride overview and named route POIs added only after your approval.
+Make mountain bike trails easier to read on Komoot. Colour S0–S5 trails, show mapped hazards and check the trails along your planned route. Analyse your ride and add named route POIs only after your approval.
+
+Map shortcuts: **Space** toggles a temporary satellite inspection view with a 1 px route and trail highlighting, sport overlays, heatmaps and Squadrats hidden. Press it again to restore the previous view. **1–5** select base maps, **Q–T** select sport maps in displayed order. See Settings → Keyboard shortcuts or [the shortcut reference](docs/KEYBOARD-SHORTCUTS.md).
 
 ## What it does
 
@@ -12,21 +14,21 @@ Make mountain bike trails easier to read on Komoot. Colour S0–S5 trails, show 
 
 Works on Komoot’s planner, route editing and full-screen map pages. Desktop Chrome/Brave and Firefox packages share the same features. Mobile has not been validated.
 
-## Route analysis (unreleased)
+## Route analysis
 
 Click **Analyse route** on the floater, even while collapsed, to start the Komoot ride summary and trail checks together. The summary shows route character, climbing concentrations and steep climbs as soon as it is ready. Adjust the minimum Gravel, Trails and Technical distances, maximum gap, ascent, gradient and climb-length thresholds as needed. Surface, way-type and elevation data come from Komoot. Missing native metadata stays unknown; the ride summary does not query OSM. Native S grades are used first; the automatic trail check reuses the existing conservative OSM matching to fill missing MTB grades. Komoot surfaces and way types are never replaced by OSM.
 
-Gravel qualifies after at least 2 km of actual gravel/dirt riding. Trails (singletrack or S0 paths) and Technical (S1–S5) require 500 m. Gaps up to 150 m join stretches without counting towards the minimum; each POI marks the first point of that riding category.
+Gravel qualifies after at least 1.5 km of actual gravel/dirt riding. Trails (singletrack or S0 paths) require 500 m; Technical (S1–S5) requires 250 m. Gaps up to 150 m join stretches without counting towards the minimum; each POI marks the first point of that riding category.
 
 Warnings appear beside riding sections in the distance-ordered **Along the route** list. Difficulty, width and mapped obstacles have distinct icons and labels. Hover or keyboard focus highlights a section without moving the map; clicking zooms to it. Ride data and trail checks have separate progress indicators. Check settings and OSM refresh live under **Check settings & data**. Missing data remains unknown. Closing the panel cancels an active check; route changes invalidate its results. Warnings are separate from POI suggestions.
 
-**Preview route POIs** previews `Gravel`, `Trails`, `Technical`, `Hills`, `Steep climb` and `Halfway` suggestions. Use each card’s magnifier to zoom to and temporarily highlight its section. Use the individual checkboxes to select the points you want, then click **Add approved POIs**. Proposed POIs remain available in their collapsible section. Matching points already on the route stay zoomable and are excluded from approval. Names stay under 16 characters; distance and climbing details appear in the preview. Points use exact positions along the route. Nearby Hills and Steep climb starts share the more specific climb POI while both findings remain in the analysis. With complete elevation, the overview can show where 95% of climbing is behind you. The extension checks geometry and existing POIs, avoids duplicate additions and restores the original route if insertion fails. Close the dialog to cancel an insertion. Save the route using Komoot when ready; the extension does not save automatically. Komoot and supported devices handle synchronization.
+**Preview route POIs** previews `Gravel`, `Trails`, `Technical`, `Hills`, `Steep climb` and `Halfway` suggestions. Use each card’s magnifier to zoom to and temporarily highlight its section. Use the individual checkboxes to select the points you want, then click **Add approved POIs**. Proposed POIs remain available in their collapsible section. Matching points already on the route stay zoomable and are excluded from approval. Names stay under 16 characters; distance and climbing details appear in the preview. Points use exact positions along the route unless an ordinary waypoint lies within 100 m both geographically and along the route; in that case its position is kept and it receives the generated name and icon. Existing custom POIs are protected. Route edits clear generated customizations while retaining the waypoints and restoring original names. This applies to points created with 1.8.0 ownership metadata; older generated points need manual cleanup. Nearby Hills and Steep climb starts share the more specific climb POI while both findings remain in the analysis. With complete elevation, the overview can show where 95% of climbing is behind you. The extension checks geometry and existing POIs, avoids duplicate additions and restores the original route if insertion fails. Close the dialog to cancel an insertion. Save the route using Komoot when ready; the extension does not save automatically. Komoot and supported devices handle synchronization.
 
 See [feature behavior and validation](docs/RIDE-OVERVIEW.md).
 
 ## Install or update
 
-Get the appropriate file from [GitHub Releases](https://github.com/redfellow/komoot-routing-buddy/releases). Packages include Finland data and are about 150 MB each.
+Install Chrome/Brave from the [Chrome Web Store](https://chromewebstore.google.com/detail/ddndlhfekbkhjbalkjojocghcmkndakh) for automatic updates. [GitHub Releases](https://github.com/redfellow/komoot-routing-buddy/releases) also provide manual Chrome and unsigned Firefox packages while Firefox Store availability is pending. Packages include Finland data and are about 150 MB each.
 
 ### Chrome / Brave
 
@@ -34,7 +36,7 @@ Get the appropriate file from [GitHub Releases](https://github.com/redfellow/kom
 2. Open `chrome://extensions` or `brave://extensions` and enable **Developer mode**.
 3. Choose **Load unpacked** and select the extracted folder.
 4. Wait for the **Local Finland data** tab to finish importing. It closes automatically.
-5. Open a Komoot map. Expand the floater and use **Settings** to change settings.
+5. Open a Komoot map. Expand the floater to change settings directly.
 
 To update, replace the files in the same folder with the new Chrome package, then click **Reload** on the extension’s card. Your preferences and local data remain in the browser.
 
@@ -86,4 +88,8 @@ On the first supported Komoot map after installation, a three-step guide explain
 
 ### Road numbers
 
-Settings → Emphasize road numbers makes available road references easier to read beside road names on Komoot's vector map. It is off by default and keeps Komoot's zoom and label-placement rules. Availability depends on the map's native data; it does not change route analysis or make extra data requests.
+Settings → Emphasize road numbers makes available road references easier to read beside road names on Komoot's vector map. It is on by default, uses compact road-class shields and respects native label collisions. Availability depends on the map's native data; it does not change route analysis or make extra data requests.
+
+The maximum trail level controls highlighting, not path visibility. Higher grades retain Komoot’s native paths and labels, including in MTB mode. Hazard crumbs follow the highlighting limit; hazard warning icons remain independent.
+
+The floater starts collapsed. Expand it to edit settings directly; there is no separate Settings button. Road-number emphasis defaults on. Squadrats controls appear when its layers are detected on the active map.

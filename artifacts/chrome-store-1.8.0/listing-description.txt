@@ -1,0 +1,28 @@
+Understand the ride you have planned in Komoot. Colour mountain-bike trails, explore terrain and climbing, check mapped trail warnings, and choose useful moments to keep as named route POIs.
+
+GET STARTED
+A short, three-step guide introduces trail colours, route analysis and approved POIs on your first Komoot map. Replay it any time through Settings → Show quick guide.
+
+SEE THE TRAILS
+Choose colours for S0–S5 difficulty levels and display mapped mud, vegetation, obstacles and trail widths. The compact floater keeps trail colours and Analyse route within reach.
+
+UNDERSTAND YOUR RIDE
+Analyse route brings the ride overview and trail checks together. See distance, ascent and route character, with separate surface and way-type breakdowns. Find sustained Gravel, Trails and Technical sections, concentrated climbing and steep climbs. Komoot supplies surfaces, way types and elevation; native MTB grades take priority, with conservative OSM matching used where grades are missing.
+
+INSPECT WHAT MATTERS
+Riding sections and mapped warnings appear together in distance order. Hover or keyboard focus highlights a section without moving the map; click to zoom closer. Highlight missing-grade stretches and expand data-gap notices when you want more detail. Set your own difficulty, width and section-detection thresholds.
+
+KEEP USEFUL MOMENTS
+Preview proposed Gravel, Trails, Technical, Hills, Steep climb and Halfway POIs. Inspect each suggestion, select it individually, then add only the points you approve. Existing matching points are excluded from approval. Names fit within 16 characters. Nearby ordinary waypoints within 100 m are reused without moving them; otherwise suggestions use exact positions along the route. Existing custom POIs are protected. Editing the route clears outdated generated labels while leaving ordinary waypoints in place. The extension verifies route geometry and existing waypoint metadata and attempts restoration if insertion fails. Save your route in Komoot when ready; synchronization with supported navigation devices is handled by Komoot and device manufacturers.
+
+MAP CONTROLS
+Press Space for satellite inspection with a solid 1 px route and overlays hidden; press it again to restore your view. Use 1–5 for base maps and Q–T for sport maps. Available road numbers receive compact road-class shields by default. Expand the floater to change settings directly; Squadrats controls appear when its layers are detected.
+
+LOCAL DATA AND PRIVACY
+Finland OSM data is bundled for local use and imports in a background tab. Weekly country updates are enabled by default and can involve large downloads and temporary disk space. You can disable automatic updates or pause downloads in Local Finland data.
+
+Show hazards is enabled by default. Outside local coverage, map hazards and route checks send geographic area bounds to Private.coffee, VK Maps or overpass-api.de; these providers also receive your IP address and normal request metadata. Explicit route-data refresh sends area bounds even inside local coverage. Geofabrik receives public country-data download requests, not route geometry. Preferences may synchronize through your browser account when sync is enabled. Generated POI descriptions include an ownership marker, route fingerprint and any original waypoint name; Komoot can display or export this metadata. The project operates no server receiving route data and includes no analytics or advertising tracking. See the linked privacy policy for details.
+
+Works on desktop Komoot planner, route-editing and full-screen map pages. Mobile has not been validated. Mapped conditions can be incomplete or outdated; missing data is shown explicitly. Squadrats display adjustments require the separate Squadrats extension.
+
+Data is © OpenStreetMap contributors, ODbL. Komoot Routing Buddy is an independent project, not affiliated with or endorsed by Komoot.

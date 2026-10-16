@@ -1,6 +1,6 @@
 # Privacy policy
 
-Last updated: 2026-10-14.
+Last updated: 2026-10-16.
 
 ## Purpose and scope
 
@@ -11,6 +11,8 @@ Komoot Routing Buddy is an independent extension maintained by the redfellow Git
 The extension reads route geometry and map state on supported Komoot planner, route-editing and full-screen map pages to display trail colours, hazards and trail-check results. Route matching takes place in your browser. The extension does not upload full route geometry, account credentials or browsing history to a project-operated server. It has no analytics or advertising tracking.
 
 The ride overview also reads the current route's elevation and waypoint metadata in your browser. Generating suggestions does not modify your route. Adding approved POIs uses Komoot's planner and routing service, which receives the route and waypoint information needed to recalculate it. Names, icons and coordinates are written to the current Komoot route only after approval. The extension does not automatically save the route; saving and device synchronization are handled by Komoot. The ride summary uses Komoot surface, way-type and elevation data in your browser. Analyse route also starts trail checks automatically. Trail checks and map hazard features can make the online OSM requests described below. Where Komoot has no MTB grade, the summary can reuse conservatively matched grades from completed trail checks.
+
+Generated POIs store a versioned ownership marker, generated name and icon category, route-coordinate fingerprint and any original waypoint name in Komoot’s custom POI description. This description can be visible in Komoot or exported to a navigation device. After route geometry changes, the extension removes stale generated customizations while retaining the ordinary waypoints and restoring original names. User-renamed or restyled points and unrelated custom POIs are preserved. This metadata is part of the Komoot route and is not sent to a project-operated server.
 
 ## Preferences and browser synchronization
 
