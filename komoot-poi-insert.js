@@ -81,6 +81,9 @@
 				custom = reference.get("cnwId") != null,
 				state = Object.fromEntries(["type", "id", "location", "name", "cnwId", "cnwName", "cnwCategory", "cnwDescription"]
 					.map((key) => [key, reference.get(key)]));
+			// Hydrating a saved Highlight converts its numeric ID to a string.
+			// Compare the identity consistently without relaxing other waypoint checks.
+			if (typeof state.id === "number" || typeof state.id === "string") state.id = String(state.id);
 			// Komoot rebuilds cnw references from the routing response with cnwName,
 			// omitting the redundant plain name and sometimes an empty description.
 			if (custom) {

@@ -14,10 +14,11 @@ test("geometry comparison accepts rounded inserted vertices while rejecting actu
 function fixture(mode) {
 	let state = { items: [{ lat: 61, lng: 23 }, { lat: 61.001, lng: 23 }, { lat: 61.002, lng: 23 }],
 		waypoints: [{ index: 0, location: { lat: 61, lng: 23 } }, { index: 2, location: { lat: 61.002, lng: 23 }, cnwId: 1, cnwName: "Existing", cnwCategory: 35 }] };
+	if (mode?.startsWith("highlight")) Object.assign(state.waypoints[0], { type: "highlight_point", id: 7528607, name: "Watchtower" });
 	const events = [], calls = [];
 	const collection = { get models() {
 		return state.waypoints.map(function (entry) {
-			return { get: (key) => entry[key], link: () => ({ get: (key) => key === "type" ? "point" : entry[key], set: (value) => Object.assign(entry, value) }) };
+			return { get: (key) => entry[key], link: () => ({ get: (key) => key === "type" ? entry.type ?? "point" : entry[key], set: (value) => Object.assign(entry, value) }) };
 		});
 	}, trigger: (event) => events.push(event) };
 	const tour = {
@@ -27,6 +28,10 @@ function fixture(mode) {
 		async wpAdd(value, options) { calls.push(value); state.waypoints.splice(options.at, 0, value); },
 		async fetchByWaypoints() {
 			if (mode === "failure") throw new Error("Routing failed");
+			if (mode?.startsWith("highlight")) state.waypoints[0].id = String(state.waypoints[0].id);
+			if (mode === "highlightChanged") state.waypoints[0].id = "7528608";
+			if (mode === "highlightMoved") state.waypoints[0].location.lng += 0.001;
+			if (mode === "highlightRenamed") state.waypoints[0].name = "Different";
 			if (mode === "reroute") state.items[1].lng += 0.001;
 			if (mode === "subdivision") {
 				state.items.splice(1, 0, { ...calls[0].location });
@@ -235,4 +240,20 @@ test("waypoints physically nearby on a different part of a loop are not reused",
 	await api.insert(f.tour, [{ ...poi, distance: 2223.898532891 + 55.5974633223, point: [23, 61.0005] }], control);
 	assert.equal(f.calls.length, 1);
 	assert.equal(f.read().waypoints[0].cnwName, undefined);
+});
+
+
+test("hydrated Highlight IDs preserve existing waypoints when Komoot converts numbers to strings", async function () {
+	const f = fixture("highlightNormalized");
+	assert.equal((await api.insert(f.tour, [poi], control)).added, 1);
+	assert.equal(f.read().waypoints[0].id, "7528607");
+	assert.equal(f.read().waypoints[0].name, "Watchtower");
+});
+
+test("Highlight identity, location and name changes still restore the route", async function () {
+	for (const mode of ["highlightChanged", "highlightMoved", "highlightRenamed"]) {
+		const f = fixture(mode), original = f.read();
+		await assert.rejects(api.insert(f.tour, [poi], control), /changed an existing route waypoint.*restored/);
+		assert.deepEqual(f.read(), original);
+	}
 });
