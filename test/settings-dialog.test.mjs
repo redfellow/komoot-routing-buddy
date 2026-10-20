@@ -67,3 +67,14 @@ test("Squadrats controls start hidden and only accept context from their Komoot 
 	events.message({ source: parent, origin: "https://www.komoot.com", data: { type: "KRB_SETTINGS_CONTEXT", squadratsAvailable: false } });
 	assert.equal(section.hidden, true);
 });
+
+
+test("road-number zoom preference defaults to overview scale and bounds invalid settings", async function () {
+	let value;
+	const context = { KrbBrowser: { storage: { sync: { async get() { return { trailOptions: { roadNumberMinZoom: value } }; } } } } };
+	runInNewContext(readFileSync(new URL("../settings.js", import.meta.url), "utf8"), context);
+	for (const [saved, expected] of [[undefined, 9], [NaN, 9], ["10", 9], [11, 11], [0, 8], [30, 14]]) {
+		value = saved;
+		assert.equal((await context.KrbSettings.getOptions()).roadNumberMinZoom, expected);
+	}
+});

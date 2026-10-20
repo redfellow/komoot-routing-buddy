@@ -106,6 +106,10 @@
 
 	function installMapBridge() {
 		if (document.querySelector("#krb-map-bridge")) return;
+		const roadReferences = document.createElement("script");
+		roadReferences.src = globalThis.KrbBrowser.runtime.getURL("road-references-fi.js");
+		roadReferences.async = false;
+		(document.head || document.documentElement).append(roadReferences);
 		const estimates = document.createElement("script");
 		estimates.src = globalThis.KrbBrowser.runtime.getURL("squadrats-estimate.js");
 		estimates.async = false;
@@ -132,6 +136,7 @@
 					colours,
 					colourLabels: options.colourLabels === true,
 					emphasizeRoadNumbers: options.emphasizeRoadNumbers === true,
+					roadNumberMinZoom: options.roadNumberMinZoom,
 					showHazards: options.showHazards,
 					narrowWarningWidth: options.narrowWarningWidth,
 					preloadRouteHazards: options.preloadRouteHazards === true,

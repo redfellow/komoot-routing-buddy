@@ -159,6 +159,11 @@ async function save() {
 	}, 2200);
 }
 
+function updateRoadNumberZoom() {
+	const zoom = Number(document.querySelector("#roadNumberMinZoom").value), kilometres = 4 * 2 ** (10 - zoom);
+	document.querySelector("#roadNumberMinZoomValue").textContent = kilometres >= 1 ? `~${kilometres} km scale` : `~${kilometres * 1000} m scale`;
+}
+
 async function saveOptions() {
 	const existing = await popupSettings.getOptions();
 	await globalThis.KrbBrowser.storage.sync.set({
@@ -170,6 +175,7 @@ async function saveOptions() {
 			estimateSquadrats: document.querySelector("#estimateSquadrats").checked,
 			colourLabels: document.querySelector("#colourLabels").checked,
 			emphasizeRoadNumbers: document.querySelector("#emphasizeRoadNumbers").checked,
+			roadNumberMinZoom: Number(document.querySelector("#roadNumberMinZoom").value),
 			showHazards: document.querySelector("#showHazards").checked,
 			preloadRouteHazards: document.querySelector("#preloadRouteHazards").checked,
 			rememberLayers: document.querySelector("#rememberLayers").checked,
@@ -205,6 +211,8 @@ document.querySelector("#restore").addEventListener("click", async function () {
 		popupSettings.DEFAULT_OPTIONS.squadratsBelowRoads;
 	document.querySelector("#colourLabels").checked = popupSettings.DEFAULT_OPTIONS.colourLabels;
 	document.querySelector("#emphasizeRoadNumbers").checked = popupSettings.DEFAULT_OPTIONS.emphasizeRoadNumbers;
+	document.querySelector("#roadNumberMinZoom").value = popupSettings.DEFAULT_OPTIONS.roadNumberMinZoom;
+	updateRoadNumberZoom();
 	document.querySelector("#showHazards").checked = popupSettings.DEFAULT_OPTIONS.showHazards;
 	document.querySelector("#preloadRouteHazards").checked = false;
 	document.querySelector("#rememberLayers").checked = popupSettings.DEFAULT_OPTIONS.rememberLayers;
@@ -338,6 +346,10 @@ async function initialise() {
 	document.querySelector("#colourLabels").checked = options.colourLabels === true;
 	document.querySelector("#emphasizeRoadNumbers").checked = options.emphasizeRoadNumbers === true;
 	document.querySelector("#emphasizeRoadNumbers").addEventListener("change", saveOptions);
+	document.querySelector("#roadNumberMinZoom").value = options.roadNumberMinZoom;
+	updateRoadNumberZoom();
+	document.querySelector("#roadNumberMinZoom").addEventListener("input", updateRoadNumberZoom);
+	document.querySelector("#roadNumberMinZoom").addEventListener("change", saveOptions);
 	document.querySelector("#colourLabels").addEventListener("change", saveOptions);
 	document.querySelector("#showHazards").checked = options.showHazards;
 	const narrowSlider = document.querySelector("#narrowWarningWidth");

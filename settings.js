@@ -15,6 +15,7 @@
 		visualsEnabled: true,
 		colourLabels: false,
 		emphasizeRoadNumbers: true,
+		roadNumberMinZoom: 9,
 		showHazards: true,
 		narrowWarningWidth: 0.4,
 		preloadRouteHazards: false,
@@ -58,6 +59,8 @@
 		]);
 		const options = { ...DEFAULT_OPTIONS, ...(saved.trailOptions || {}) };
 		options.emphasizeRoadNumbers = options.emphasizeRoadNumbers === true;
+		options.roadNumberMinZoom = Number.isFinite(options.roadNumberMinZoom)
+			? Math.round(Math.max(8, Math.min(14, options.roadNumberMinZoom))) : DEFAULT_OPTIONS.roadNumberMinZoom;
 		options.estimateSquadrats = options.estimateSquadrats === true;
 		options.narrowWarningWidth = Number.isFinite(options.narrowWarningWidth)
 			? Math.round(Math.max(0.2, Math.min(1, options.narrowWarningWidth)) * 10) / 10

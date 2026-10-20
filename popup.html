@@ -98,6 +98,11 @@
 			</details>
 			<label class="checkbox-setting"><input id="emphasizeRoadNumbers" type="checkbox" /> <span>Emphasize road numbers</span></label>
 			<p class="settings__road-numbers">Make available road numbers easier to read on Komoot’s vector map.</p>
+			<label class="setting" for="roadNumberMinZoom">
+				<span>Show road numbers up to <output id="roadNumberMinZoomValue" for="roadNumberMinZoom">~8 km scale</output></span>
+				<input id="roadNumberMinZoom" type="range" min="8" max="14" step="1" value="9" />
+			</label>
+			<p class="settings__road-numbers">Left: farther out · Right: closer in. Scale is approximate and varies with latitude.</p>
 			<section id="squadratsSettings" class="settings__squadrats" hidden>
 			<label class="checkbox-setting"><input id="estimateSquadrats" type="checkbox" /> <span>Estimate gained Squadrats</span></label>
 			<label class="checkbox-setting"

@@ -227,7 +227,7 @@
 	}
 	// Stretch only the centre so borders and corners stay crisp around longer refs.
 	function installRoadShields() {
-		for (const [kind, colour] of Object.entries({ main: [209, 88, 88], national: [239, 196, 64], regional: [255, 255, 255], local: [58, 105, 175], unknown: [82, 91, 101] })) {
+		for (const [kind, colour] of Object.entries({ main: [209, 88, 88], national: [239, 196, 64], regional: [255, 255, 255], local: [58, 105, 175], unknown: [82, 91, 101], european: [35, 129, 72] })) {
 			const id = `krb-road-shield-${kind}`;
 			if (map.hasImage(id)) continue;
 			const width = 40, height = 32, data = new Uint8Array(width * height * 4);
@@ -257,6 +257,49 @@
 	function removeRoadShield(saved) {
 		if (map.getLayer(saved.shieldId)) map.removeLayer(saved.shieldId);
 	}
+	function roadNumberZoom() {
+		return Number.isFinite(config.roadNumberMinZoom) ? Math.max(8, Math.min(14, config.roadNumberMinZoom)) : 9;
+	}
+	function removeFinlandRoadNumbers() {
+		for (const id of ["krb-road-fi-national", "krb-road-fi-european"]) {
+			if (map.getLayer(id)) map.removeLayer(id);
+		}
+		if (map.getSource("krb-road-fi")) map.removeSource("krb-road-fi");
+	}
+	function applyFinlandRoadNumbers(layers) {
+		const dataset = globalThis.KrbRoadReferencesFI;
+		if (!dataset || !layers.length) {
+			removeFinlandRoadNumbers();
+			return;
+		}
+		const minimum = roadNumberZoom(), template = layers[0], kind = roadShieldClass(template),
+			font = Array.isArray(template.layout["text-font"]) && template.layout["text-font"].every((entry) => typeof entry === "string")
+				? template.layout["text-font"].map((entry) => entry === "Satoshi Regular" ? "Satoshi Bold" : entry)
+				: template.layout["text-font"] || ["Open Sans Regular"];
+		if (!map.getSource("krb-road-fi"))
+			map.addSource("krb-road-fi", { type: "geojson", data: dataset.data, tolerance: 0.5, attribution: "© OpenStreetMap contributors" });
+		for (const european of [false, true]) {
+			const id = european ? "krb-road-fi-european" : "krb-road-fi-national", existing = map.getLayer(id);
+			if (existing && existing.minzoom === minimum) continue;
+			if (existing) map.removeLayer(id);
+			const field = european ? "european" : "ref", hasEuropean = ["!=", ["get", "european"], ""];
+			map.addLayer({ id, type: "symbol", source: "krb-road-fi", minzoom: minimum,
+				filter: ["!=", ["get", field], ""],
+				layout: {
+					"symbol-placement": "line", "symbol-spacing": 600,
+					"text-field": ["get", field], "text-font": font,
+					"text-size": european ? 11 : ["match", kind, "main", 11.55, "national", 11, "local", 8.25, 9.9],
+					"text-anchor": european ? "left" : ["case", hasEuropean, "right", "center"],
+					"text-offset": european ? [0.4, 0] : ["case", hasEuropean, ["literal", [-0.4, 0]], ["literal", [0, 0]]],
+					"text-rotation-alignment": "viewport", "icon-rotation-alignment": "viewport",
+					"text-padding": 6, "icon-padding": 2,
+					"icon-image": european ? "krb-road-shield-european" : ["concat", "krb-road-shield-", kind],
+					"icon-text-fit": "both", "icon-text-fit-padding": [1, 2, 1, 2],
+				},
+				paint: { "text-color": european ? "#ffffff" : ["match", kind, ["national", "regional"], "#232d32", "#ffffff"], "text-halo-width": 0 },
+			});
+		}
+	}
 	function applyRoadNumbers() {
 		const layers = (map.getStyle()?.layers || []).filter(function (layer) {
 			return layer.type === "symbol" && layer["source-layer"] === "road-label" &&
@@ -270,6 +313,7 @@
 			}
 		}
 		if (config.visualsEnabled === false || config.emphasizeRoadNumbers !== true) {
+			removeFinlandRoadNumbers();
 			for (const [id, saved] of roadNumberOriginals) {
 				removeRoadShield(saved);
 				setLayout(id, "text-field", saved.field);
@@ -278,6 +322,7 @@
 			return;
 		}
 		installRoadShields();
+		applyFinlandRoadNumbers(layers);
 		const ref = ["to-string", ["coalesce", ["get", "ref"], ""]], hasRef = ["!=", ref, ""];
 		for (const layer of layers) {
 			if (!roadNumberOriginals.has(layer.id)) {
@@ -288,7 +333,8 @@
 				referenceOnly = JSON.stringify(saved.field).includes("ref") && !JSON.stringify(saved.field).includes("name");
 			// Keep street names in their native layer; replace existing ref-only labels.
 			if (referenceOnly) setLayout(layer.id, "text-field", "");
-			if (map.getLayer(saved.shieldId)) continue;
+			if (map.getLayer(saved.shieldId)?.minzoom === roadNumberZoom()) continue;
+			removeRoadShield(saved);
 			const shield = { id: saved.shieldId, type: "symbol", source: layer.source, "source-layer": layer["source-layer"],
 				layout: {
 					"symbol-placement": layer.layout["symbol-placement"] || "line",
@@ -308,9 +354,13 @@
 					"icon-image": ["case", hasRef, ["match", kind, "main", "krb-road-shield-main", "national", "krb-road-shield-national", "regional", "krb-road-shield-regional", "local", "krb-road-shield-local", "krb-road-shield-unknown"], ""],
 					"icon-text-fit": "both", "icon-text-fit-padding": [1, 2, 1, 2],
 				}, paint: { "text-color": ["match", kind, ["national", "regional"], "#232d32", "#ffffff"], "text-halo-width": 0 } };
-			for (const property of ["minzoom", "maxzoom", "filter"]) {
+			// The user controls the overview limit independently of street names.
+			shield.minzoom = roadNumberZoom();
+			for (const property of ["maxzoom", "filter"]) {
 				if (layer[property] !== undefined) shield[property] = structuredClone(layer[property]);
 			}
+			if (globalThis.KrbRoadReferencesFI?.boundary)
+				shield.filter = ["all", shield.filter || true, ["!", ["within", globalThis.KrbRoadReferencesFI.boundary]]];
 			// Give emphasized numbers priority over native one-way arrows and labels.
 			map.addLayer(shield);
 		}

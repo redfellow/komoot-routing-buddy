@@ -11,3 +11,5 @@
 /.venv-local-osm/
 /scripts/local-osm/__pycache__/
 .DS_Store
+
+/scripts/road-numbers/__pycache__/

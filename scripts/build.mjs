@@ -36,6 +36,7 @@ export const runtimeFiles = [
 	"osm-prepare.js",
 	"hazard-icons.png",
 	"map-bridge.js",
+	"road-references-fi.js",
 	"planner.css",
 	"popup.html",
 	"privacy.html",

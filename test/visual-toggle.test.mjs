@@ -6,7 +6,7 @@ import { runInNewContext } from "node:vm";
 const source = readFileSync(new URL("../map-bridge.js", import.meta.url), "utf8");
 const copy = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
 
-function fixture() {
+function fixture(roadReferences) {
 	const original = {
 		id: "mtb-trails-easy",
 		type: "line",
@@ -156,6 +156,7 @@ function fixture() {
 		console,
 		location: { origin: "https://www.komoot.com" },
 		structuredClone,
+		KrbRoadReferencesFI: roadReferences,
 		document: {
 			currentScript: { dataset: { hazardIcons: "chrome-extension://test/hazard-icons.png" } },
 			createElement() {
@@ -1475,7 +1476,7 @@ test("road shields prefer reference categories over physical highway class", fun
 	assert.equal(evaluate(shield.paint["text-color"], { ref: "65" }), "#232d32");
 	assert.equal(evaluate(shield.paint["text-color"], { ref: "339" }), "#232d32");
 	assert.equal(evaluate(shield.layout["icon-image"], {}), "");
-	assert.equal(shield.minzoom, original.minzoom);
+	assert.equal(shield.minzoom, 9);
 	assert.deepEqual(shield.filter, original.filter);
 });
 
@@ -1720,4 +1721,44 @@ test("satellite inspection suspends trail highlighting across restyles and resto
 	assert.deepEqual(f.layers, native);
 	f.reply({ type: "KRB_INSPECTION_MODE", active: false });
 	assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" }), "#7a1016");
+});
+
+
+test("road-number visibility follows the slider and restores native labels when off", function () {
+	const f = fixture(), original = numberedRoad();
+	f.layers.push(copy(original));
+	f.configure({ emphasizeRoadNumbers: true });
+	assert.equal(f.layers.find((layer) => layer.id === "krb-road-number-label-road-primary").minzoom, 9);
+	f.configure({ emphasizeRoadNumbers: true, roadNumberMinZoom: 11 });
+	assert.equal(f.layers.find((layer) => layer.id === "krb-road-number-label-road-primary").minzoom, 11);
+	assert.deepEqual(f.layers[3], original);
+	f.configure({ visualsEnabled: false });
+	assert.ok(!f.layers.some((layer) => layer.id.startsWith("krb-road-number-")));
+	assert.deepEqual(f.layers[3], original);
+});
+
+
+test("Finland reference overlay pairs green E shields with national numbers and obeys toggles", function () {
+	const dataset = { data: { type: "FeatureCollection", features: [] }, boundary: { type: "Polygon", coordinates: [[[20, 60], [30, 60], [30, 70], [20, 60]]] } };
+	const f = fixture(dataset);
+	f.layers.push(numberedRoad());
+	f.configure({ emphasizeRoadNumbers: true });
+	assert.deepEqual(f.sources.get("krb-road-fi").data, dataset.data);
+	const national = f.layers.find((layer) => layer.id === "krb-road-fi-national"), european = f.layers.find((layer) => layer.id === "krb-road-fi-european");
+	assert.equal(european.layout["icon-image"], "krb-road-shield-european");
+	assert.equal(european.paint["text-color"], "#ffffff");
+	assert.deepEqual(european.layout["text-field"], ["get", "european"]);
+	assert.equal(national.minzoom, 9);
+	assert.equal(european.minzoom, 9);
+	assert.ok(f.images.has("krb-road-shield-european"));
+	const native = f.layers.find((layer) => layer.id === "krb-road-number-label-road-primary");
+	assert.deepEqual(native.filter.at(-1), ["!", ["within", dataset.boundary]]);
+	const count = f.layers.length;
+	f.restyle();
+	assert.equal(f.layers.length, count);
+	f.configure({ emphasizeRoadNumbers: true, roadNumberMinZoom: 12 });
+	assert.equal(f.layers.find((layer) => layer.id === european.id).minzoom, 12);
+	f.configure({ emphasizeRoadNumbers: true, visualsEnabled: false });
+	assert.equal(f.sources.has("krb-road-fi"), false);
+	assert.ok(!f.layers.some((layer) => layer.id.startsWith("krb-road-fi-")));
 });
