@@ -89,7 +89,7 @@ On the first supported Komoot map after installation, a three-step guide explain
 
 ### Road numbers
 
-Settings → Emphasize road numbers makes available road references easier to read beside road names on Komoot's vector map. It is on by default, uses compact road-class shields and respects native label collisions. Availability depends on the map's native data; it does not change route analysis or make extra data requests.
+Settings → Emphasize road numbers makes available road references easier to read beside road names on Komoot's vector map. It is on by default, uses compact road-class shields and respects native label collisions. A visibility slider controls how far out shields remain visible. In Finland, bundled OpenStreetMap references also show national numbers and green E-road shields at overview scales, including the 4 km scale. Outside Finland, availability depends on the map's native data; it does not change route analysis or make extra data requests.
 
 The maximum trail level controls highlighting, not path visibility. Higher grades retain Komoot’s native paths and labels, including in MTB mode. Hazard crumbs follow the highlighting limit; hazard warning icons remain independent.
 

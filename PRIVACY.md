@@ -39,3 +39,5 @@ Komoot Routing Buddy’s use of user data complies with the Chrome Web Store Use
 ## Questions and changes
 
 For privacy questions, contact the maintainer through https://github.com/redfellow/komoot-routing-buddy/issues. Issues are public: do not include private route coordinates or personal information. If you choose to submit an issue, GitHub handles that submission under its own privacy policy. This policy will be updated when data practices change; material changes will also be disclosed in the extension and release documentation.
+
+Road-number emphasis uses a bundled public OpenStreetMap extract for Finland national and E-road references. Displaying these labels makes no additional network requests and does not send viewed map bounds anywhere.
