@@ -1,0 +1,37 @@
+Plan your next Komoot ride with clearer trails, useful route insights and fewer surprises.
+
+• TRAIL COLOURS — See MTB difficulty at a glance.
+• ROUTE ANALYSIS — Check & confirm gravel, trails, technical sections and demanding climbs.
+• HAZARDS — Spot logs, mud, blockers and narrow paths.
+• SQUADRATS — Estimate gained tiles before your ride. Requires the Squadrats extension.
+• ROAD-NUMBER BADGES — Read road numbers more easily, including green E-road badges in Finland.
+
+GET STARTED
+Open a route in Komoot and follow the short first-use guide. Switch trail colours on or off from the floating panel, or click Analyse route to explore your ride. Replay the guide any time in Settings.
+
+MORE ABOUT THE FEATURES
+
+Trail colours
+Choose custom colours for S0–S5 MTB difficulty levels and select which grades to highlight. Other trails remain visible without highlighting.
+
+Route analysis
+See the mix of surfaces and riding types, concentrated climbing and steep climbs. Click a section or warning to zoom to it on the map. Preview suggested Gravel, Trails, Technical, Hills, Steep climb and Halfway waypoints, then add only the ones you approve. Save in Komoot to keep them and transfer them to supported navigation devices.
+
+Hazards
+Display mapped obstacles and trail widths. Route checks flag mapped hazards and trails beyond your chosen difficulty or width limits. Conditions may be incomplete or outdated.
+
+Squadrats
+Estimate new Squadrats and Squadratinhos, Yard and Yardinho growth, and larger Übersquadrat and Übersquadratinho squares. Calculations use the collection already loaded by the separate Squadrats extension and run locally. Results are estimates.
+
+Road-number badges
+Compact, colour-coded badges make road references easier to spot. Bundled Finland references include national and green E-road numbers. Use the visibility slider to choose how far out the badges remain visible. Elsewhere, availability depends on Komoot’s map data.
+
+Map shortcuts
+Press Space for satellite inspection with a thin route line and overlays hidden. Press it again to restore your view. Number and letter shortcuts switch map layers; find the shortcut guide in Settings.
+
+AVAILABILITY AND DATA
+Works on desktop Komoot route planning, editing and full-screen maps. Mobile has not been validated.
+
+Finland trail data is bundled for local use. Outside local coverage, hazard checks use online OpenStreetMap services. Automatic Finland trail-data updates are enabled by default and can be turned off. Road-number data is bundled separately. See the privacy policy for data-use details.
+
+Independent project, not affiliated with or endorsed by Komoot or Squadrats. Map data © OpenStreetMap contributors, ODbL.
