@@ -5,10 +5,14 @@ import { runInNewContext } from "node:vm";
 
 test("bundled Finland road references contain real segment geometry and E-road identities", function () {
 	const context = {};
-	runInNewContext(readFileSync(new URL("../road-references-fi.js", import.meta.url), "utf8"), context);
+	for (const file of ["road-references-fi.js", "road-references-fi-part1.js", "road-references-fi-part2.js", "road-references-fi-part3.js"]) {
+		const source = readFileSync(new URL("../" + file, import.meta.url), "utf8");
+		assert.ok(Buffer.byteLength(source) < 5000000, `${file} exceeds Firefox parsing limit`);
+		runInNewContext(source, context);
+	}
 	const { data, boundary } = context.KrbRoadReferencesFI;
 	assert.equal(data.type, "FeatureCollection");
-	assert.ok(data.features.length > 1000);
+	assert.equal(data.features.length, 8900);
 	assert.ok(/^\d{4}-\d{2}-\d{2}T/.test(data.osmTimestamp));
 	assert.ok(data.attribution.includes("OpenStreetMap"));
 	assert.equal(boundary.type, "MultiPolygon");
@@ -38,6 +42,11 @@ test("road-reference data loads before the map bridge and is included in packagi
 		packaging = readFileSync(new URL("../scripts/build.mjs", import.meta.url), "utf8");
 	assert.ok(content.indexOf('getURL("road-references-fi.js")') < content.indexOf('getURL("map-bridge.js")'));
 	assert.ok(manifest.web_accessible_resources.some((entry) => entry.resources.includes("road-references-fi.js")));
-	assert.ok(packaging.includes('"road-references-fi.js"'));
+	for (const file of ["road-references-fi.js", "road-references-fi-part1.js", "road-references-fi-part2.js", "road-references-fi-part3.js"]) {
+		const position = content.indexOf(`"${file}"`);
+		assert.ok(position >= 0 && position < content.indexOf('getURL("map-bridge.js")'));
+		assert.ok(manifest.web_accessible_resources.some((entry) => entry.resources.includes(file)));
+		assert.ok(packaging.includes(`"${file}"`));
+	}
 	assert.deepEqual(manifest.permissions, ["storage", "unlimitedStorage", "declarativeNetRequestWithHostAccess", "alarms"]);
 });

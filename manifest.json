@@ -43,7 +43,7 @@
 	],
 	"web_accessible_resources": [
 		{
-			"resources": ["road-references-fi.js", "squadrats-estimate.js", "map-bridge.js", "komoot-poi-insert.js", "hazard-icons.png", "popup.html"],
+			"resources": ["road-references-fi.js", "road-references-fi-part1.js", "road-references-fi-part2.js", "road-references-fi-part3.js", "squadrats-estimate.js", "map-bridge.js", "komoot-poi-insert.js", "hazard-icons.png", "popup.html"],
 			"matches": ["https://www.komoot.com/*"]
 		}
 	],

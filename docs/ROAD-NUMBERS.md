@@ -27,7 +27,7 @@ Settings → **Show road numbers up to** controls minimum map zoom from 8 to 14,
 
 ### Data provenance and refresh
 
-Road-reference data is © OpenStreetMap contributors, licensed under [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/), separate from the extension code's licence. The generated `road-references-fi.js` contains the source timestamp. The source extract is supplied by [Geofabrik](https://download.geofabrik.de/europe/finland.html). Download a Finland PBF, then regenerate without building the extension:
+Road-reference data is © OpenStreetMap contributors, licensed under [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/), separate from the extension code's licence. The generated `road-references-fi.js` contains the source timestamp and boundary; three adjacent `road-references-fi-part*.js` files hold the geometry. Each file stays below Firefox’s 5 MB parsing limit and all four load before the map bridge. The source extract is supplied by [Geofabrik](https://download.geofabrik.de/europe/finland.html). Download a Finland PBF, then regenerate without building the extension:
 
 ```sh
 .venv-local-osm/bin/python scripts/road-numbers/prepare.py --pbf /path/to/finland.osm.pbf --coverage /path/to/snapshot/manifest.json

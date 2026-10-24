@@ -111,6 +111,34 @@ def from_pbf(path):
 	return {"elements": ways, "osm3s": {"timestamp_osm_base": timestamp}}
 
 
+def write_bundle(output, data, boundary):
+	"""Keep executable data files below Firefox's 5 MB parsing limit."""
+	features = data["features"]
+	encoded = [json.dumps(feature, separators=(",", ":")) for feature in features]
+	target = max(1, (sum(len(item) + 1 for item in encoded) + 2) // 3)
+	chunks = [[], [], []]
+	index = 0
+	size = 0
+	for item in encoded:
+		if size >= target and index < 2:
+			index += 1
+			size = 0
+		chunks[index].append(item)
+		size += len(item) + 1
+	metadata = {**data, "features": []}
+	header = "// OpenStreetMap contributors, ODbL 1.0. See docs/ROAD-NUMBERS.md.\n"
+	files = [(output, header + "globalThis.KrbRoadReferencesFI = " + json.dumps({"data": metadata, "boundary": boundary}, separators=(",", ":")) + ";\n")]
+	for number, chunk in enumerate(chunks, 1):
+		path = output.with_name(f"{output.stem}-part{number}.js")
+		files.append((path, header + "globalThis.KrbRoadReferencesFI.data.features.push(...[" + ",".join(chunk) + "]);\n"))
+	if any(len(content.encode("utf-8")) >= 5000000 for _, content in files):
+		raise RuntimeError("Road-reference bundle exceeds Firefox's per-file parsing limit")
+	output.parent.mkdir(parents=True, exist_ok=True)
+	for path, content in files:
+		path.write_text(content)
+	return [path for path, _ in files]
+
+
 def main():
 	parser = argparse.ArgumentParser(description=__doc__)
 	parser.add_argument("--input", type=Path)
@@ -141,8 +169,8 @@ def main():
 		coverage_path = Path("local-osm-data") / release["directory"] / "manifest.json"
 	coverage = json.loads(coverage_path.read_text())["coverage"]
 	boundary = {"type": "MultiPolygon", "coordinates": [[ring["coordinates"]] for ring in coverage["rings"] if not ring["hole"]]}
-	args.output.write_text("// OpenStreetMap contributors, ODbL 1.0. See docs/ROAD-NUMBERS.md.\n" + "globalThis.KrbRoadReferencesFI = " + json.dumps({"data": result, "boundary": boundary}, separators=(",", ":")) + ";\n")
-	print(f'{len(result["features"])} roads, {args.output.stat().st_size} bytes, OSM {result["osmTimestamp"]}')
+	files = write_bundle(args.output, result, boundary)
+	print(f'{len(result["features"])} roads, {sum(path.stat().st_size for path in files)} bytes across {len(files)} files, OSM {result["osmTimestamp"]}')
 
 
 if __name__ == "__main__":

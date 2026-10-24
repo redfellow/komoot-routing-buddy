@@ -27,6 +27,22 @@ class RoadReferencesTest(unittest.TestCase):
 		points = [[23, 61], [23.001, 61], [23.002, 61], [23.002, 61.002]]
 		self.assertEqual(prepare.simplify(points), [points[0], points[2], points[3]])
 
+	def test_bundle_preserves_order_and_metadata_in_small_files(self):
+		import json
+		features = [{"id": index, "value": "x" * (index * 100)} for index in range(20)]
+		data = {"type": "FeatureCollection", "features": features, "osmTimestamp": "2026-10-18"}
+		boundary = {"type": "MultiPolygon", "coordinates": []}
+		with tempfile.TemporaryDirectory() as directory:
+			files = prepare.write_bundle(Path(directory) / "roads.js", data, boundary)
+			self.assertEqual(len(files), 4)
+			metadata = json.loads(files[0].read_text().split(" = ", 1)[1].rstrip().removesuffix(";"))
+			restored = []
+			for path in files[1:]:
+				self.assertLess(path.stat().st_size, 5000000)
+				restored.extend(json.loads(path.read_text().split("push(...", 1)[1].rstrip().removesuffix(");")))
+			metadata["data"]["features"] = restored
+			self.assertEqual(metadata, {"data": data, "boundary": boundary})
+
 	def test_pbf_adapter_reads_e_road_relation_membership(self):
 		with tempfile.TemporaryDirectory() as directory:
 			source = Path(directory) / "roads.osm"

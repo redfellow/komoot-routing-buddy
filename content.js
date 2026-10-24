@@ -110,6 +110,12 @@
 		roadReferences.src = globalThis.KrbBrowser.runtime.getURL("road-references-fi.js");
 		roadReferences.async = false;
 		(document.head || document.documentElement).append(roadReferences);
+		for (const file of ["road-references-fi-part1.js", "road-references-fi-part2.js", "road-references-fi-part3.js"]) {
+			const part = document.createElement("script");
+			part.src = globalThis.KrbBrowser.runtime.getURL(file);
+			part.async = false;
+			(document.head || document.documentElement).append(part);
+		}
 		const estimates = document.createElement("script");
 		estimates.src = globalThis.KrbBrowser.runtime.getURL("squadrats-estimate.js");
 		estimates.async = false;
