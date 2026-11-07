@@ -1,0 +1,14 @@
+{
+  ".harvaaja/instructions/plan.md": {
+    "version": 1,
+    "base": "# Planning this project\n\nRules for planners, on top of härvääjä's own. Keep them about this project: how its tests are named, run and\ntiered, what its end-to-end tests are, and anything every plan must include.\n\n## Proofs\n\n- Name each task's proof as the narrowest command of this project's test runner that covers the task, and lint\n  or type checks of only the files it touches.\n- Mark which tests are fast enough for every round: a first-line comment `@harvaaja-test-tier: fast`,\n  `integration` or `host` lets härvääjä leave the slow ones to the release check.\n"
+  },
+  ".harvaaja/instructions/build.md": {
+    "version": 1,
+    "base": "# Building this project\n\nRules for implementers and fixers, on top of härvääjä's own. Keep them about this project: the commands that\nrun one test file, lint or type check, and conventions the code must follow.\n\n## Proofs\n\n- Run only the test files that cover what you changed, with this project's test runner.\n- A new test gets a first-line comment `@harvaaja-test-tier: fast`, `integration` or `host`: fast for\n  isolated logic, integration for anything that needs real processes, files or services, host for what can't\n  run in the sandbox.\n"
+  },
+  ".harvaaja/review.md": {
+    "version": 1,
+    "base": "# Review criteria\n\nBesides tracing every behavior to the change's spec, hold the change to these. Each one broken is a change to make.\n\n## Safety\n\n- Nothing weakens how the project handles secrets, credentials or user data.\n- No automated test reaches a real outside service.\n\n## Compatibility\n\n- Stored data, public APIs and file formats stay readable by the previous version, or the change says how they move.\n\n## Words\n\n- Text a person reads (UI, messages, errors) is plain and specific: it says what happened and what can be done.\n"
+  }
+}
