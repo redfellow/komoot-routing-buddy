@@ -1,0 +1,22 @@
+setup:
+  check: install
+  clean: [node_modules]
+checks:
+  - name: install
+    run: npm ci
+    network: [registry.npmjs.org]
+    timeoutSeconds: 600
+  - name: unit
+    run: npm test
+    stage: every
+    timeoutSeconds: 600
+  # Build runs the bundler and may be heavy (packages ~150 MB); kept at final.
+  - name: firefox-lint
+    run: npm run lint:firefox
+    stage: final
+    timeoutSeconds: 900
+  # Needs the Python venv and release data; not reproducible in a sandbox, so manual (safer).
+  - name: local-osm-python
+    run: npm run test:local-osm
+    stage: manual
+    sandbox: none
