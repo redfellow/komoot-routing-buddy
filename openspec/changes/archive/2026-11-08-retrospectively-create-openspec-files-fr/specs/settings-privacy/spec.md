@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Synced preferences
-Preferences (trail colours, rules, map options, trail-check preferences) SHALL be stored in browser sync storage. Route matching and country data SHALL stay in the browser with no analytics or upload to a project server.
+Preferences (trail colours, rules, map options, trail-check preferences) SHALL be stored in browser sync storage; device-local state such as the floater position, the quick-guide marker and the automatic country-update preference SHALL be stored in local storage. Route matching and country data SHALL stay in the browser with no analytics or upload to a project server.
 
 #### Scenario: No upload
 - **WHEN** the user analyses a route

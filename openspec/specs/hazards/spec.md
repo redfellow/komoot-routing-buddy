@@ -1,7 +1,12 @@
-## ADDED Requirements
+# hazards Specification
+
+## Purpose
+Show mapped trail hazards from OpenStreetMap on the Komoot map.
+
+## Requirements
 
 ### Requirement: Mapped hazard display
-When **Show hazards** is on (the default), the extension SHALL show mapped mud, overgrown sections, fallen trees, obstacles and trail widths from OpenStreetMap on the map.
+When **Show hazards** is on (the default) and the master toggle is On, the extension SHALL show mapped mud, vegetation or overgrown sections, logs or fallen trees, other obstacles and narrow trail widths from OpenStreetMap on the map.
 
 #### Scenario: Hazards shown by default
 - **WHEN** a fresh install opens a Komoot map with mapped hazards in view

@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Map shortcuts
-On supported map pages, **Space** SHALL toggle a satellite inspection view (Satellite, no sport map or heatmap, trail highlighting and Squadrats hidden, 1 px route) and restore the previous view when pressed again. **1–5** SHALL select Default, NLS Map, Satellite, OpenStreetMap and OpenCycleMap; **Q–T** SHALL select sport map choices in Komoot's displayed order.
+On supported map pages, **Space** SHALL toggle a satellite inspection view (Satellite, no sport map or heatmap, trail highlighting and Squadrats hidden, 1 px route) and restore the previous view when pressed again. **1–5** SHALL select Default, NLS Map, Satellite, OpenStreetMap and OpenCycleMap; **Q–T** SHALL select the first through fifth sport map choices in Komoot's displayed order. The master Off toggle SHALL disable shortcuts and restore an active inspection.
 
 #### Scenario: Space restores view
 - **WHEN** the user presses Space twice
