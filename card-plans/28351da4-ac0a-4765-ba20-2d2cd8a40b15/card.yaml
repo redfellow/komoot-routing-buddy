@@ -1,0 +1,19 @@
+format: 1
+slug: retrospectively-create-openspec-files-fr
+title: Retrospectively create OpenSpec files from the projects features
+x-harvaaja-card: 28351da4-ac0a-4765-ba20-2d2cd8a40b15
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: No main specs exist; retrospective capability specs are new
+    contracts. The only active change
+    (compare-squadrats-estimates-with-komoot-ui) has no specs and differs in
+    intent.
+  citations:
+    - openspec/specs/ (empty)
+    - openspec/changes/compare-squadrats-estimates-with-komoot-ui
+    - README.md
+    - docs/
+  revision: 6d2c5425-9a56-488c-adf5-f262d2ad4727
