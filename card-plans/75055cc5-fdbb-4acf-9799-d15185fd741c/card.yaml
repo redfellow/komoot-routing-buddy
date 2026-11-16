@@ -1,0 +1,16 @@
+format: 1
+slug: show-the-extension-version-in-the-settin
+title: Show the extension version in the settings popup
+x-harvaaja-card: 75055cc5-fdbb-4acf-9799-d15185fd741c
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: new-change
+  rationale: Adds a new visible popup contract (version line); no active change
+    covers the popup.
+  citations:
+    - openspec/specs/settings-privacy/spec.md
+    - popup.html:140
+    - browser-api.js:3
+  revision: e82b2dbb-d887-49e2-80a4-eacce778e004

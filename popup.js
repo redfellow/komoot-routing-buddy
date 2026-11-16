@@ -400,4 +400,11 @@ document.querySelector("#showQuickGuide").addEventListener("click", async functi
 	}
 });
 
+// The version comes from the manifest so it never needs manual updates.
+function showVersion() {
+	const version = globalThis.KrbBrowser?.runtime?.getManifest?.()?.version;
+	if (version) document.querySelector("#version").textContent = `Version ${version}`;
+}
+
+showVersion();
 initialise();

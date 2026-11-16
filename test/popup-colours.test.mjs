@@ -25,7 +25,7 @@ function setup() {
 		};
 	}
 	const nodes = Object.fromEntries(
-		["#rules", "#status", "#restore", "#showQuickGuide"].map((name) => [name, element()]),
+		["#rules", "#status", "#restore", "#showQuickGuide", "#version"].map((name) => [name, element()]),
 	);
 	const timers = new Map();
 	const writes = [];
@@ -36,6 +36,11 @@ function setup() {
 		console,
 		KrbSettings: { LEVELS: ["S0"] },
 		KrbBrowser: {
+			runtime: {
+				getManifest() {
+					return { version: "0.0.0" };
+				},
+			},
 			tabs: {
 				async query() {
 					return [{ id: 7 }];

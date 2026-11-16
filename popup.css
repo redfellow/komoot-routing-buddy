@@ -225,4 +225,6 @@ body.krb-local-data {
 
 #status:empty { display: none; }
 .settings__data-link { margin: 6px 0 0; font-size: 12px; }
+.settings__version { margin: 6px 0 0; color: #657266; font-size: 12px; }
+.settings__version:empty { display: none; }
 .settings__squadrats[hidden] { display: none; }

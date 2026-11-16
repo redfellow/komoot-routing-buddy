@@ -57,6 +57,8 @@ If online data is needed, progress shows cached and downloaded areas. Temporary 
 
 Finland data is bundled and imported automatically, so covered map areas and trail checks normally need no online OSM queries. Outside coverage, the extension uses the Overpass API. These public servers can be slow or temporarily unavailable.
 
+The settings popup shows the installed extension version (for example `Version 1.9.0`) in a muted line at the bottom, so you can quote it in bug reports.
+
 Open **Local Finland data** in settings to see the data date or update it. Weekly updates are on by default. A country update downloads roughly 770 MB and takes several minutes; allow several GB of free disk space. Keep its background tab open. You can pause and resume, and your previous data stays usable until the update succeeds.
 
 **Update current route from OSM** fetches fresh data just around that route. Successful results are kept for seven days. **Clear OSM cache** clears online data and route refreshes, but keeps the Finland snapshot.
