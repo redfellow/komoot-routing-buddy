@@ -1,2 +1,11 @@
+# Hosts the workspace's agents and checks may reach. Nothing else is allowed.
+# Not listed on purpose: download.geofabrik.de and the Overpass hosts used by the data:* scripts and the extension.
+# No check or agent needs them, and no automated test may reach them.
 allow:
-  - registry.npmjs.org
+  - github.com               # git fetch and push
+  - api.github.com           # GitHub API (gh CLI, pull requests)
+  - codeload.github.com      # repository archives
+  - '*.githubusercontent.com' # raw files and release assets
+  - registry.npmjs.org       # npm packages: install check, npm outdated and npm audit
+  - pypi.org                 # Python index for scripts/local-osm/requirements.txt (venv set up by hand)
+  - files.pythonhosted.org   # Python package files for the same venv

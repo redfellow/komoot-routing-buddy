@@ -1,14 +1,26 @@
 {
   ".harvaaja/instructions/plan.md": {
     "version": 1,
-    "base": "# Planning this project\n\nRules for planners, on top of härvääjä's own. Keep them about this project: how its tests are named, run and\ntiered, what its end-to-end tests are, and anything every plan must include.\n\n## Proofs\n\n- Name each task's proof as the narrowest command of this project's test runner that covers the task, and lint\n  or type checks of only the files it touches.\n- Mark which tests are fast enough for every round: a first-line comment `@harvaaja-test-tier: fast`,\n  `integration` or `host` lets härvääjä leave the slow ones to the release check.\n"
+    "base": "# Planning this workspace\n\nRules for planners, on top of härvääjä's own. Keep them about this workspace: how its tests are named, run and\ntiered, what its end-to-end tests are, and anything every plan must include.\n\n## Proofs\n\n- Name each task's proof as the narrowest command of this workspace's test runner that covers the task, and lint\n  or type checks of only the files it touches.\n- Mark which tests are fast enough for every round: a first-line comment `@harvaaja-test-tier: fast`,\n  `integration` or `host` lets härvääjä leave the slow ones to the release check.\n"
   },
   ".harvaaja/instructions/build.md": {
     "version": 1,
-    "base": "# Building this project\n\nRules for implementers and fixers, on top of härvääjä's own. Keep them about this project: the commands that\nrun one test file, lint or type check, and conventions the code must follow.\n\n## Proofs\n\n- Run only the test files that cover what you changed, with this project's test runner.\n- A new test gets a first-line comment `@harvaaja-test-tier: fast`, `integration` or `host`: fast for\n  isolated logic, integration for anything that needs real processes, files or services, host for what can't\n  run in the sandbox.\n"
+    "base": "# Building this workspace\n\nRules for implementers and fixers, on top of härvääjä's own. Keep them about this workspace: the commands that\nrun one test file, lint or type check, and conventions the code must follow.\n\n## Proofs\n\n- Run only the test files that cover what you changed, with this workspace's test runner.\n- A new test gets a first-line comment `@harvaaja-test-tier: fast`, `integration` or `host`: fast for\n  isolated logic, integration for anything that needs real processes, files or services, host for what can't\n  run in the sandbox.\n"
   },
   ".harvaaja/review.md": {
     "version": 1,
-    "base": "# Review criteria\n\nBesides tracing every behavior to the change's spec, hold the change to these. Each one broken is a change to make.\n\n## Safety\n\n- Nothing weakens how the project handles secrets, credentials or user data.\n- No automated test reaches a real outside service.\n\n## Compatibility\n\n- Stored data, public APIs and file formats stay readable by the previous version, or the change says how they move.\n\n## Words\n\n- Text a person reads (UI, messages, errors) is plain and specific: it says what happened and what can be done.\n"
+    "base": "# Review criteria\n\nBesides tracing every behavior to the change's spec, hold the change to these. Each one broken is a change to make.\n\n## Safety\n\n- Nothing weakens how the workspace handles secrets, credentials or user data.\n- No automated test reaches a real outside service.\n\n## Compatibility\n\n- Stored data, public APIs and file formats stay readable by the previous version, or the change says how they move.\n\n## Words\n\n- Text a person reads (UI, messages, errors) is plain and specific: it says what happened and what can be done.\n"
+  },
+  ".harvaaja/branches.yaml": {
+    "version": 1,
+    "base": "# Cards merge into this branch instead of the default branch; the default branch only receives promotions,\n# by a pull request a person merges. Remove the line to merge cards straight into the default branch.\nintegration: hv/main\n"
+  },
+  "AGENTS.md": {
+    "version": 2,
+    "base": "## Härvääjä\n\nThis repository is run by härvääjä, which plans, builds and reviews its work as cards on a board. Code freely; hv is\nhere if you want it:\n\n- `hv board` shows the board.\n- `hv capture` puts an idea, bug or chore on the board as a card.\n- `hv fast-lane` sends work made outside the board to the base branch through härvääjä's checks.\n- `hv brand` prints the workspace's brand book (its look and voice rules); run it before UI work when the workspace has one.\n\nNever edit a card's worktree under `harvaaja-worktrees/`: use Build again on the card, or answer its question.\n"
+  },
+  "CLAUDE.md": {
+    "version": 2,
+    "base": "## Härvääjä\n\nThis repository is run by härvääjä, which plans, builds and reviews its work as cards on a board. Code freely; hv is\nhere if you want it:\n\n- `hv board` shows the board.\n- `hv capture` puts an idea, bug or chore on the board as a card.\n- `hv fast-lane` sends work made outside the board to the base branch through härvääjä's checks.\n- `hv brand` prints the workspace's brand book (its look and voice rules); run it before UI work when the workspace has one.\n\nNever edit a card's worktree under `harvaaja-worktrees/`: use Build again on the card, or answer its question.\n"
   }
 }
