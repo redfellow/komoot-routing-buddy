@@ -1,0 +1,2 @@
+## Approach
+Static empty `<p id="version" class="settings__version">` in popup.html; popup.js sets `textContent = \`Version ${KrbBrowser.runtime.getManifest().version}\`` on load. Uses the existing `KrbBrowser` wrapper (browser-api.js), working in Chrome and Firefox. Styled muted and small via `.settings__version` in popup.css. Tested by extending the vm-based harness in test/popup-colours.test.mjs pattern.
