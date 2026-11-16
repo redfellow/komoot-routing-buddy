@@ -6,3 +6,12 @@ x-harvaaja-card: efc167aa-eec4-4b15-8e2f-af09ed4d5b40
 x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: Code (Array.from(name).length > 16 rejected) and spec ("at most 16")
+    agree; only README's "under 16" is off by one. Docs fix.
+  citations:
+    - komoot-poi-insert.js:148
+    - openspec/specs/ride-analysis/spec.md:30
+    - README.md:26
+  revision: 2383ed89-bb77-4a23-8d66-14e1473c46f5
