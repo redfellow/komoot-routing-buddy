@@ -1,6 +1,6 @@
 # Tasks
 
-- [ ] 1.1 Confirm this branch carries all of hv/main and adds no content beyond the card's plan files
+- [x] 1.1 Confirm this branch carries all of hv/main and adds no content beyond the card's plan files
   - proof: `git merge-base --is-ancestor origin/hv/main HEAD`
   - proof: `git diff --stat origin/main HEAD -- . ':(exclude)card-plans'`
 
