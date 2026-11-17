@@ -27,7 +27,7 @@ Warnings SHALL appear beside riding sections in a distance-ordered **Along the r
 - **THEN** it is highlighted and the map does not move
 
 ### Requirement: Route POI suggestions with approval
-**Preview route POIs** SHALL propose `Gravel`, `Trails`, `Technical`, `Hills`, `Steep climb` and `Halfway` POIs with names of at most 16 characters, and SHALL insert only those the user selects via **Add approved POIs**. Existing custom POIs SHALL be protected, duplicates avoided, ordinary waypoints within 100 m reused, and the original route restored if insertion fails. The extension SHALL NOT save the route automatically.
+**Preview route POIs** SHALL propose `Gravel`, `Trails`, `Technical`, `Hills`, `Steep climb` and `Halfway` POIs with names of at most 12 characters, and SHALL insert only those the user selects via **Add approved POIs**. Existing custom POIs SHALL be protected, duplicates avoided, ordinary waypoints within 100 m reused, and the original route restored if insertion fails. The extension SHALL NOT save the route automatically.
 
 #### Scenario: Only approved points inserted
 - **WHEN** the user ticks two of five suggestions and clicks **Add approved POIs**
