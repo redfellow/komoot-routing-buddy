@@ -1,22 +1,51 @@
+# Checks for komoot-routing-buddy. Written from package.json, package-lock.json, scripts/, test/ and docs/.
+# There are no CI workflows in the repository. There is no linter or type checker, so there is no lint check.
 setup:
   check: install
   clean: [node_modules]
 checks:
   - name: install
     run: npm ci
-    network: [registry.npmjs.org]
+    network: [registry.npmjs.org]   # every lockfile entry resolves from this host
     timeoutSeconds: 600
+  # Runs all of test/ (node:test, one file per module) and build tests, which write only to temp directories.
+  # Not timed here: check the every-round duration on the first run and move slow files to a final check if needed.
   - name: unit
     run: npm test
     stage: every
     timeoutSeconds: 600
   # Build runs the bundler and may be heavy (packages ~150 MB); kept at final.
+  # It writes dist/ (gitignored) and then runs web-ext lint with warnings as errors.
   - name: firefox-lint
     run: npm run lint:firefox
     stage: final
     timeoutSeconds: 900
   # Needs the Python venv and release data; not reproducible in a sandbox, so manual (safer).
+  # .venv-local-osm is gitignored and built by hand (docs/LOCAL-OSM.md), so a fresh worktree does not have it.
   - name: local-osm-python
     run: npm run test:local-osm
     stage: manual
     sandbox: none
+  # No npm script runs scripts/road-numbers tests (docs/ROAD-NUMBERS.md names only prepare.py).
+  # Added so the Python test file is not silently skipped. Same venv as above, so manual and host-only.
+  - name: road-numbers-python
+    run: .venv-local-osm/bin/python -m unittest discover -s scripts/road-numbers -p 'test_*.py'
+    stage: manual
+    sandbox: none
+  # Dependency sweep input (npm outdated). npm exits 1 whenever something is outdated, which is the normal case,
+  # so the exit code is ignored; the JSON output is what the sweep reads. The Python pin in
+  # scripts/local-osm/requirements.txt (osmium==4.3.1) is not covered: it lives in a hand-built venv.
+  - name: outdated
+    run: npm outdated --json || true
+    role: outdated
+    stage: manual
+    network: [registry.npmjs.org]
+    timeoutSeconds: 300
+  # Security sweep input (npm audit). npm audit exits non-zero when advisories exist, so its exit code is ignored.
+  # Output is what the sweep reads; a registry failure shows up as empty or error output, so check it once by hand.
+  - name: audit
+    run: npm audit --json || true
+    role: audit
+    stage: manual
+    network: [registry.npmjs.org]
+    timeoutSeconds: 300
