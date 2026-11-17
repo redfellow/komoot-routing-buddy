@@ -1,0 +1,15 @@
+format: 1
+slug: main-branch-brought-up-to-date
+title: Main branch brought up to date
+x-harvaaja-card: ac572c48-41cd-4a0f-8ada-34115bdbc64f
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+route:
+  kind: no-spec-change
+  rationale: "Git-only: land hv/main's 3 merge commits onto main via this branch;
+    no behaviour change."
+  citations:
+    - git rev-list --left-right --count origin/main...origin/hv/main -> 0 3
+    - git diff origin/main origin/hv/main -> empty
+  revision: 54fa0119-bebc-4c01-abe0-3921767a065e
