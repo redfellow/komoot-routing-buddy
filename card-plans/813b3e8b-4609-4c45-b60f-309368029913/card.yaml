@@ -6,3 +6,12 @@ x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
 x-harvaaja-owner-name: Sohvamäkki
 x-harvaaja-owner-person: Reijo
 x-harvaaja-repairs-main: true
+route:
+  kind: no-spec-change
+  rationale: "Check-config fix: npm ci writes its cache to ~/.npm, outside the
+    sandbox; unit and firefox-lint fail only because node_modules is missing. No
+    user-visible behaviour."
+  citations:
+    - .harvaaja/checks.yaml install check
+    - git show ca84a51b2a11 touches only .agents/skills docs
+  revision: cb94e228-f650-45f8-9732-3f5fa334d70c
