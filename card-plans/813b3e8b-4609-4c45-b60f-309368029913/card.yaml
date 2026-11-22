@@ -1,0 +1,8 @@
+format: 1
+slug: fix-failing-checks-install-unit-firefox
+title: "Fix failing checks: install, unit & firefox-lint"
+x-harvaaja-card: 813b3e8b-4609-4c45-b60f-309368029913
+x-harvaaja-owner: b480b8ae-9b42-451b-865d-ff78d89e33ad
+x-harvaaja-owner-name: Sohvamäkki
+x-harvaaja-owner-person: Reijo
+x-harvaaja-repairs-main: true
