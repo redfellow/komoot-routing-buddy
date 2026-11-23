@@ -4,6 +4,7 @@ context: |
   Language: en
   All artifacts must be written in en.
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+skillsScope: project
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
