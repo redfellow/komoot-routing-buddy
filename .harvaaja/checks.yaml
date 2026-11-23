@@ -5,7 +5,8 @@ setup:
   clean: [node_modules]
 checks:
   - name: install
-    run: npm ci
+    # The sandbox keeps ~/.npm read-only, so npm's cache goes in the run's temp folder.
+    run: npm ci --no-audit --no-fund --cache "$TMPDIR/harvaaja-npm-cache"
     network: [registry.npmjs.org]   # every lockfile entry resolves from this host
     timeoutSeconds: 600
   # Runs all of test/ (node:test, one file per module) and build tests, which write only to temp directories.
