@@ -1,6 +1,6 @@
 # Tasks
 
-- [ ] 1.1 (triage) Point the install check's npm cache at the temp folder
+- [x] 1.1 (triage) Point the install check's npm cache at the temp folder
   - file: .harvaaja/checks.yaml
   - content:
 

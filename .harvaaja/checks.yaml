@@ -5,7 +5,7 @@ setup:
   clean: [node_modules]
 checks:
   - name: install
-    run: npm ci
+    run: npm ci --cache "${TMPDIR:-/tmp}/npm-cache"   # ~/.npm is not writable in the sandbox
     network: [registry.npmjs.org]   # every lockfile entry resolves from this host
     timeoutSeconds: 600
   # Runs all of test/ (node:test, one file per module) and build tests, which write only to temp directories.
