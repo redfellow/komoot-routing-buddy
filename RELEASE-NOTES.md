@@ -1,3 +1,10 @@
+# 1.10.0
+
+- Fix Finland data updates, automatic and manual, failing with "Invalid or oversized dated Finland source". Geofabrik moved its Finland extracts to a new folder; updates now follow it and still accept data prepared from the old location.
+- Bundled Finland data refreshed to the latest Geofabrik extract.
+
+No new extension permissions or host permissions. Chrome users can update through the Chrome Web Store. Store publication is subject to Google's review.
+
 # 1.9.0
 
 - Estimate planned Squadrats gains in Analyse route: new Squadrats and Squadratinhos, Yard and Yardinho growth, and larger Übersquadrat and Übersquadratinho squares. Enabled by default when the separate Squadrats extension has loaded its collection; calculations run locally.
