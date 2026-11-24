@@ -1,6 +1,6 @@
 // Persist raw source chunks so interruption can resume a pinned dated extract.
 (function () {
-	const base = "https://download.geofabrik.de/europe/",
+	const base = "https://download.geofabrik.de/europe/finland/",
 		chunkSize = 8 * 1024 * 1024;
 	function request(r) {
 		return new Promise(function (resolve, reject) {
@@ -111,7 +111,7 @@
 				size = Number(response.headers.get("Content-Length"));
 			if (
 				!response.ok ||
-				!/^https:\/\/download\.geofabrik\.de\/europe\/finland-\d{6}\.osm\.pbf$/.test(url) ||
+				!/^https:\/\/download\.geofabrik\.de\/europe\/(?:finland\/)?finland-\d{6}\.osm\.pbf$/.test(url) ||
 				!Number.isSafeInteger(size) ||
 				size <= 0 ||
 				size > 2 * 1024 * 1024 * 1024
