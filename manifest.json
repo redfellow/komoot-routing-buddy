@@ -1,7 +1,7 @@
 {
 	"manifest_version": 3,
 	"name": "Komoot Routing Buddy",
-	"version": "1.9.0",
+	"version": "1.10.0",
 	"description": "Colour MTB trails, analyse routes, spot hazards, estimate Squadrats gains and highlight road numbers in Komoot.",
 	"permissions": ["storage", "unlimitedStorage", "declarativeNetRequestWithHostAccess", "alarms"],
 	"action": {
