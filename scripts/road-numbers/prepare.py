@@ -159,7 +159,7 @@ def main():
 		raise RuntimeError(data["remark"])
 	result = convert(data)
 	if args.pbf:
-		result["source"] = "https://download.geofabrik.de/europe/" + args.pbf.name
+		result["source"] = "https://download.geofabrik.de/europe/finland/" + args.pbf.name
 	if not result["features"]:
 		raise RuntimeError("No numbered roads returned")
 	args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 import { createHash, webcrypto } from "node:crypto";
 import { IDBFactory } from "fake-indexeddb";
 const bytes = new Uint8Array(readFileSync(new URL("fixtures/local-osm.osm.pbf", import.meta.url)));
-const url = "https://download.geofabrik.de/europe/finland-260930.osm.pbf";
+const url = "https://download.geofabrik.de/europe/finland/finland-260930.osm.pbf";
 const coverage = {
 	format: "osm-poly-rings-v1",
 	rings: [
