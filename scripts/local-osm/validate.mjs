@@ -104,7 +104,7 @@ export async function validateSnapshot(directory, options = {}) {
 	validateManifest(manifest);
 	validateFreshness(manifest, options);
 	if (
-		!/^https:\/\/download\.geofabrik\.de\/europe\/finland-\d{6}\.osm\.pbf$/.test(
+		!/^https:\/\/download\.geofabrik\.de\/europe\/(?:finland\/)?finland-\d{6}\.osm\.pbf$/.test(
 			manifest.source?.url || "",
 		) ||
 		!/^[a-f0-9]{32}$/.test(manifest.source.md5 || "") ||

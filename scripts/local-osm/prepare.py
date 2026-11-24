@@ -20,7 +20,7 @@ import osmium
 KEYS = "highway area mtb:scale width est_width surface obstacle overgrown barrier hazard hazard:forward hazard:backward layer bridge tunnel".split()
 HAZARDS = set("obstacle overgrown barrier hazard hazard:forward hazard:backward".split())
 HIGHWAYS = {"path", "track", "footway", "bridleway", "cycleway"}
-BASE = "https://download.geofabrik.de/europe/"
+BASE = "https://download.geofabrik.de/europe/finland/"
 
 
 class PreparationError(Exception):

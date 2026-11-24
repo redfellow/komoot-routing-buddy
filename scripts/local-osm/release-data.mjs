@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { validateSnapshot, validateFreshness, SnapshotValidationError } from "./validate.mjs";
 const root = fileURLToPath(new URL("../../", import.meta.url)),
-	base = "https://download.geofabrik.de/europe/";
+	base = "https://download.geofabrik.de/europe/finland/";
 const context = {};
 runInNewContext(await readFile(new URL("../../osm-download.js", import.meta.url), "utf8"), context);
 async function metadata(response, maximum) {
@@ -41,7 +41,7 @@ export async function discoverLatest(fetcher = fetch) {
 		bytes = Number(response.headers.get("Content-Length"));
 	if (
 		!response.ok ||
-		!/^https:\/\/download\.geofabrik\.de\/europe\/finland-\d{6}\.osm\.pbf$/.test(url) ||
+		!/^https:\/\/download\.geofabrik\.de\/europe\/(?:finland\/)?finland-\d{6}\.osm\.pbf$/.test(url) ||
 		!Number.isSafeInteger(bytes) ||
 		bytes <= 0
 	)
